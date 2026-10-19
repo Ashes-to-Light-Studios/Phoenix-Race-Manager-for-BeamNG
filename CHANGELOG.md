@@ -6,6 +6,29 @@ tag, the packaged zip, and the build stamp the app shows - see the note in
 
 [← Back to the README](README.md)
 
+## Unreleased - BeamNG v0.40 and BeamMP v4.23.1
+
+Reviewed against BeamNG.drive v0.40 and BeamMP v4.23.1; see
+[Compatibility](docs/COMPATIBILITY.md). Everything the mod calls is still
+there. One break, fixed below.
+
+#### Fixed
+
+- **A held Recover cost two resets on BeamNG v0.40.** The game now resets the
+  car in place half a second into the hold and again on release, and each
+  counted against the allowance and was reported to the server. One press is
+  one reset again. When that press spends the last reset, the reset keys are
+  switched off after the release rather than while Recover is still held, and
+  the release is no longer refused as an over-allowance reset.
+
+#### Note
+
+- **Re-capture the Garage List.** v0.40 adds an occupant slot to every seat,
+  so every entry captured on v0.39 stops matching. Drivers are told the entry
+  is from an older build.
+- Every driver needs BeamNG v0.40 with BeamMP v4.23.x: BeamMP v4.23 will not
+  load on any other game version.
+
 ## 0.20.2 - Logged-in drivers recognized, a board that keeps its size
 
 #### Added

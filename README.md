@@ -236,8 +236,9 @@ expect without touching any of it.
 duplicated versions are installed. See [Install](#install).
 
 **Drivers rejected in a car that's plainly on the Garage List:** a BeamNG update
-renamed some vehicle parts, which changes the configuration signature. Re-capture
-the list. See [Compatibility](docs/COMPATIBILITY.md).
+renamed or added vehicle parts, which changes the configuration signature (v0.40
+added an occupant slot to every seat). Re-capture the list. See
+[Compatibility](docs/COMPATIBILITY.md).
 
 ## Support development
 

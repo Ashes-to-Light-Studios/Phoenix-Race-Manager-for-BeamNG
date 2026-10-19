@@ -292,6 +292,89 @@ check(countNotices() == 2, 'a later attempt reports again')
 check(countSent('RM_ResetDenied') == 2, 'and reaches the server again')
 
 -- ===========================================================================
+-- v0.40: one Recover press is one reset
+-- ===========================================================================
+-- A held Recover resets in place 0.5 s in and again on release, and both reach
+-- onVehicleResetted. The game brackets the press with onStartRecovering and
+-- onStopRecovering.
+serverState({ phase = 'waiting', maxResets = 2, totalLaps = 3, drivers = {} })
+serverState({ phase = 'racing',  maxResets = 2, totalLaps = 3, drivers = {} })
+veh.x, veh.y, veh.z = 400, 0, 0
+frames(0.6)
+clearLog()
+
+RM.onStartRecovering()
+frames(0.5)
+driverPressedReset(400, 1, 0)                -- in place, key still down
+resetHook()
+check(countSent('RM_VehicleReset') == 1, 'a held Recover spends a reset when it first resets')
+frames(2.0)                                  -- still held, rewinding
+driverPressedReset(392, 1, 0)                -- the release reset
+resetHook()
+RM.onStopRecovering()
+check(countSent('RM_VehicleReset') == 1, 'its release reset is the same reset')
+check(lastRouteState().resetsUsed == 1, 'one press spends one reset')
+frames(1.5)
+
+-- A tap: the stop hook comes first, the reset lands inside the grace.
+RM.onStartRecovering()
+RM.onStopRecovering()
+driverPressedReset(392, 2, 0)
+resetHook()
+check(countSent('RM_VehicleReset') == 2, 'a tap spends one reset')
+frames(1.5)
+check(inputsBlocked, 'allowance spent: the keys go dead once the press is over')
+
+-- The LAST reset spent mid-hold: the keys stay live until the release, and the
+-- release reset is not a refusal.
+serverState({ phase = 'waiting', maxResets = 1, totalLaps = 3, drivers = {} })
+serverState({ phase = 'racing',  maxResets = 1, totalLaps = 3, drivers = {} })
+veh.x, veh.y, veh.z = 420, 0, 0
+frames(0.6)
+check(not inputsBlocked, 'a fresh race releases the keys')
+clearLog()
+
+RM.onStartRecovering()
+frames(0.5)
+driverPressedReset(420, 1, 0)
+resetHook()
+check(countSent('RM_VehicleReset') == 1, 'the last reset is spent mid-hold')
+frames(1.0)
+check(not inputsBlocked, 'the keys stay live while Recover is held, so its release is heard')
+driverPressedReset(414, 1, 0)
+resetHook()
+RM.onStopRecovering()
+check(countSent('RM_ResetDenied') == 0, 'the release reset of that press is not refused')
+check(countNotices() == 0, 'and the driver is not told they are out')
+check(#teleports == 0, 'nor put back')
+frames(1.5)
+check(inputsBlocked, 'the keys go dead after the release')
+driverPressedReset(-40, 12, 0)
+resetHook()
+check(countSent('RM_ResetDenied') == 1, 'a later reset is refused as before')
+
+-- Only one reset per press is absorbed, so a lost stop hook gives nothing away.
+serverState({ phase = 'waiting', maxResets = 5, totalLaps = 3, drivers = {} })
+serverState({ phase = 'racing',  maxResets = 5, totalLaps = 3, drivers = {} })
+veh.x, veh.y, veh.z = 440, 0, 0
+frames(0.6)
+clearLog()
+RM.onStartRecovering()                       -- and no stop hook, ever
+for i = 1, 3 do
+  driverPressedReset(440, i, 0)
+  resetHook()
+  frames(0.2)
+end
+check(countSent('RM_VehicleReset') == 2, 'a third reset in one press is counted')
+RM.onStartRecovering()                       -- again never stopped
+driverPressedReset(440, 4, 0)
+resetHook()
+frames(31)
+driverPressedReset(440, 5, 0)
+resetHook()
+check(countSent('RM_VehicleReset') == 4, 'an unclosed press expires instead of absorbing a later reset')
+
+-- ===========================================================================
 -- Being placed on the starting grid is not a reset
 -- ===========================================================================
 serverState({ phase = 'waiting', maxResets = 1, totalLaps = 3, drivers = {} })

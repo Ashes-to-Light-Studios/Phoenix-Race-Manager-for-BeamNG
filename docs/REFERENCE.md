@@ -1039,7 +1039,10 @@ typing" and is never sent - `-1` is how you ask for unlimited.
 
 The BeamMP server never sees a reset happen, so the **client** polices it.
 Every reset inside the allowance is counted and reported (the leaderboard
-gains an `Rst` column showing `used/allowed`). Once the allowance is gone the
+gains an `Rst` column showing `used/allowed`). One press of Recover is one
+reset, however long it is held: from BeamNG v0.40 a held Recover resets the
+car twice (in place after half a second, then where the rewind ends), and the
+pair counts once. Once the allowance is gone the
 reset **inputs themselves are switched off** through BeamNG's input action
 filter - pressing reset/recover does nothing at all, the car never resets,
 and the driver simply keeps racing. As a fallback for reset paths the filter
