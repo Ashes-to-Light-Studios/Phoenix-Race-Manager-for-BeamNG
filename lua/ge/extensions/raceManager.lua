@@ -695,6 +695,14 @@ block.TELEPORT_RADIUS = 2.0      -- meters from where we put the car
 block.noticeLeft = 0
 block.NOTICE_EVERY = 1.0   -- seconds between blocked-reset reports
 
+-- ONE RECOVER PRESS IS ONE RESET. From v0.40 a held Recover resets in place at
+-- 0.5 s and again on release, and both arrive as onVehicleResetted. A press runs
+-- from the game's onStartRecovering to onStopRecovering plus a grace for the
+-- release reset to land. nil, or { counted, left (nil while held), age }.
+block.press = nil
+block.PRESS_GRACE = 1.0    -- seconds after release that still belong to the press
+block.PRESS_MAX   = 30     -- a press never outlives this, should the stop hook be lost
+
 
 -- Qualifying, mirrored from the server. finalLap: the clock ran out and this
 -- lap is the driver's last.
@@ -3428,8 +3436,10 @@ end
 local function resetInputBlockUpdate()
   -- Teleports off for the whole session; a driver OUT of it keeps them.
   setTeleportInputsBlocked(sessionRunning() and not session.spectatorLock)
+  -- Not while a Recover press is open: from v0.40 its last allowed reset lands
+  -- with the key still down, and a filter armed then can swallow the release.
   local wantBlocked = not session.spectatorLock
-    and ((resetsEnforced() and session.resetsUsed >= session.maxResets)
+    and ((resetsEnforced() and session.resetsUsed >= session.maxResets and not block.press)
       or (derbyResetsEnforced() and derbyResets.used >= derbyResets.max))
   -- ...and while a derby stands its cars down: a reset would reload the car out
   -- from under the freeze.
@@ -3762,6 +3772,14 @@ local function resetGuardUpdate(dt)
   local st = block.selfTeleport
   if st.left           > 0 then st.left           = st.left           - dt end
   if block.noticeLeft  > 0 then block.noticeLeft  = block.noticeLeft  - dt end
+  local press = block.press
+  if press then
+    press.age = press.age + dt
+    if press.left then press.left = press.left - dt end
+    if (press.left and press.left <= 0) or press.age > block.PRESS_MAX then
+      block.press = nil
+    end
+  end
 end
 
 -- Heading (hx, hy) to a quaternion standing a VEHICLE facing it. Vehicles face
@@ -4072,6 +4090,16 @@ local function restoreLastGoodPosition()
   return ok
 end
 
+-- BeamNG's recovery hooks, queued from the vehicle VM: they bracket one Recover
+-- press (see block.press).
+function M.onStartRecovering()
+  block.press = { counted = false, left = nil, age = 0 }
+end
+
+function M.onStopRecovering()
+  if block.press then block.press.left = block.PRESS_GRACE end
+end
+
 -- BeamNG hook, for every vehicle: filter to our own first.
 function M.onVehicleResetted(vehId)
   -- A RESET RELOADS THE CAR'S VM, which drops setGhostEnabled while the
@@ -4117,7 +4145,13 @@ function M.onVehicleResetted(vehId)
     ghost.arm()
   end
 
-  if resetsEnforced() and session.resetsUsed >= session.maxResets then
+  -- The second reset of one held Recover is the same reset: neither counted nor
+  -- refused. One per press, so a lost stop hook cannot hand out free resets.
+  local press = block.press
+  local repeatOfPress = press ~= nil and press.counted
+  if repeatOfPress then block.press = nil end
+
+  if resetsEnforced() and session.resetsUsed >= session.maxResets and not repeatOfPress then
     -- Over the allowance. The inputs are already filtered, so this is a path the
     -- filter cannot see: put the car back and tell the server.
     local restored = restoreLastGoodPosition()
@@ -4191,6 +4225,8 @@ function M.onVehicleResetted(vehId)
     end
   end
   if resetsEnforced() then
+    if repeatOfPress then return end
+    if press then press.counted = true end
     session.resetsUsed = session.resetsUsed + 1
     if inMultiplayer() then TriggerServerEvent('RM_VehicleReset', '') end
     local left = session.maxResets - session.resetsUsed
@@ -8786,6 +8822,7 @@ local function resetToIdle(reason)
   lastGate        = nil
   block.selfTeleport.left = 0
   block.noticeLeft = 0
+  block.press      = nil
   session.jokerEnabled    = false
   -- Both halves of the pace lap: the next server's races are not one lap long.
   session.paceLap         = false

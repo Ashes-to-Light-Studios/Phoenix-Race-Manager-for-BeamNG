@@ -5,10 +5,50 @@ recording what each one meant for this mod.
 
 [← Back to the README](../README.md)
 
-Tracked against **BeamNG.drive v0.39.3** and **BeamMP v4.22.0**. The mod talks
+Tracked against **BeamNG.drive v0.40** and **BeamMP v4.23.1**. The mod talks
 to a lot of game surfaces - vehicles, cameras, the input action filter, the
 debug drawer, the UI app host, BeamMP's event bridge - so every release gets a
 pass over the changelogs.
+
+### BeamNG.drive v0.40
+
+Reviewed against the installed game (build 287428), not only the release notes:
+every engine function, hook, input action, vehicle-side command and C++ binding
+the mod calls was looked up in the shipped Lua and binaries. One real break was
+found and fixed. One admin task: **re-capture the Garage List**.
+
+| v0.40 change | Effect on the mod | Status |
+|---|---|---|
+| *"When holding the recovery button, the vehicle will initially be reset in-place"* | A held Recover now resets the car twice: in place 0.5 s into the hold, then where the rewind ends on release. Both arrive as `onVehicleResetted`, so **one press spent two resets** of the allowance and reported two to the server. Worse, when the first of the two spent the last reset, the reset keys were switched off with Recover still held, and the release could be refused as an over-allowance reset | **Fixed.** The game brackets a press with `onStartRecovering` / `onStopRecovering`; resets inside one press count once, and the reset keys are only switched off after the release. At most one reset per press is absorbed, and a press that never reports its end expires after 30 s, so a lost hook cannot hand out free resets |
+| Physical occupants: every seat gets a `seat_occupant_*` slot holding `occupant_generic` | New slots in every car's parts tree, so **every Garage List signature captured on v0.39 stops matching**. Drivers are told the entry was captured on an older build | **Re-capture the Garage List.** The 89 kg occupant is applied as runtime cargo, not as a part, so a signature captured on v0.40 stays stable |
+| New ways out of the car: click your own seat, *Toggle unseated*, switch seats (new `enterSeat`, `toggle_unseated`, `switch_next_seat`, `switch_previous_seat` actions) | Could have let a forced spectator climb out | No change needed: every one of these asks `gameplay_walk.canToggleWalkingMode`, which refuses while `toggleWalkingMode` is filtered, and the spectator lock already filters it |
+| Switching vehicle now seats the player in the new car, and a car's inputs are cleared on a seat change or reset | Spectating (tabbing to a rival, the broadcast board) seats you in their car on your client. The seat system only swaps the camera when an occupant camera is already active, and the broadcast camera sets `orbit` | No change needed. The clear keeps the parking brake, and a derby stand-down and a grid hold are frozen anyway |
+| Local split-screen multiplayer, per-player input devices | The mod drives player 0: `getPlayerVehicle(0)`, `be:enterVehicle(0, ...)`, `core_camera.setByName(0, ...)`, all unchanged | No change needed |
+| UI: the game no longer sends `ChangeState`; `ui_router.navigate` is the way to change screens; `v-bng-panel` removed; `createVueApp` deprecated | The three HUD apps are AngularJS directives. v0.40 still ships Angular 1.5.8 and 43 stock Angular apps, still bridges `guihooks.trigger` to them and still broadcasts `app:resized` with `{ width, height }`. The apps listen only to their own events. The stuck-UI repair after joining uses `ui_router.navigate('play')` and the `routeChangeCancelled` / `onAfterRouteChange` hooks, all still present | No change needed |
+| *"Removed some outdated input actions"*, Back and Cancel merged | All 41 action names the mod filters (resets, teleports, driving, node grabber, fun stuff) still exist | No change needed |
+| Lua API: `setWindowTitle` removed, `wheels.lua` split, pursuit modules | The mod uses none of them | No change needed |
+| Cameras: `dash` renamed `driver`; free cam when the last vehicle is removed | The mod only ever sets `orbit`, and the spectator flow keeps the car | No change needed |
+| Node grabber: fixed nodes cleared on teleport | The grid hold is a controller freeze (`core_vehicleBridge` `setFreeze`), not pinned nodes | No change needed |
+| Engine bindings | `obj:setGhostEnabled` (still used by the game's own `main.lua`), `setMeshAlpha`, `reloadCollision`, `castRayStatic`, `getSpawnWorldOOBB`, the `debugDrawer` shapes, ImGui `Image` and `ImTextureHandler`, `recovery.recoverInPlace`, `input.event`, `setEngineIgnition`: all present with the same signatures | No change needed |
+| *"Custom config files will get the same name as the config again"* | The Garage List reads the name off the config, with the filename as the fallback | No change needed |
+| *"Added error logs when gelua commands enqueued by the user interface cannot be processed"* | A failing `bngApi.engineLua` call from the apps now shows in `beamng.log` instead of vanishing | No change needed; one more place to look when a button does nothing |
+
+### BeamMP v4.22.1 to v4.23.1
+
+v4.23.0 and v4.23.1 are the v0.40 builds, and **BeamMP refuses to load on any
+other game version** (`compatibleVersion = 40` in its modScript): every driver
+has to be on BeamNG v0.40 with BeamMP v4.23.x. There is no new BeamMP-Server
+release (still v3.9.4), so the server plugin is untouched.
+
+| Change | Effect on the mod | Status |
+|---|---|---|
+| `TriggerServerEvent` builds its packet with a string buffer | The wire format for a string payload is the same `E:name:data`. Only a `nil` payload differs, and the mod always sends a string (`''` or JSON) | No change needed |
+| Nametags are cached per vehicle (`updateNameTagCache`) | `setPlayerNickSuffix` refreshes the cache for every car the player owns, and a car spawned later is built with the suffix | No change needed |
+| Key listeners moved to `MPKeybindsGE`; the vehicle side no longer reads `input.keys` | The mod uses neither | No change needed |
+| Unicycle clean-up reads v0.40's per-player `unicycleIds` | The radar skips unicycles by jbeam name, which v0.40 keeps (`unicycle`) | No change needed |
+| Session hooks, ownership and the event bridge | `onBeamMPServerLeave` and `onBeamMPPostJoin` still fire; `getVehicles`, `isOwn`, `getPlayerServerID`, `setPlayerNickSuffix` and `AddEventHandler` are unchanged, as are the `ownerID` and `gameVehicleID` fields | No change needed |
+| `MPVehicleGE.onServerVehicleSpawned` / `onServerVehicleEdited` | Still not exported, as in v4.22.0, so the spawn-event parts catch stays inert and the Garage List reads parts from the vehicle's own config | No change needed |
+| Translations, server browser, chat, login, player list UI | Internal to BeamMP | No change needed |
 
 ### BeamMP v4.22.0
 
