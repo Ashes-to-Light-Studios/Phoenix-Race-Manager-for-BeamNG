@@ -6,6 +6,31 @@ tag, the packaged zip, and the build stamp the app shows - see the note in
 
 [← Back to the README](README.md)
 
+## Unreleased - Start the out lap part way round
+
+#### Added
+
+- **First checkpoint, for a grid part way round.** A grid away from the line
+  gives its first lap away as an out lap, and that lap always armed CP 1. With
+  the grid past CP 1, the run to the line had nothing lit, and the out lap then
+  went all the way round to CP 1 and back before lap 2. In the editor's
+  **Grid** tab, **First checkpoint** names the first gate ahead of the grid: set
+  it to `CP 3` and the green lights CP 3, then CP 4, CP 5 and the line. The line
+  ends the out lap, untimed as before.
+
+  Saved with the layout and used by every out lap on it: a race's, qualifying's
+  and the pace lap. Anything past CP 1 also marks the grid as off the line, so
+  the out lap is owed even within 250 m of it. Inserting, deleting or reordering
+  checkpoints keeps it on the same gate. A layout that never set it runs as
+  before.
+
+#### Fixed
+
+- **The out-lap section of the reference described two removed rules.** It said
+  the line ends an out lap from wherever you have got to, a shortcut taken out
+  in 0.15.0, and that a race on an off-the-line grid adds the out lap on top of
+  the distance. It comes out of the distance: a 10-lap race is 10 crossings.
+
 ## 0.20.3 - BeamNG v0.40 and BeamMP v4.23.1
 
 Reviewed against BeamNG.drive v0.40 and BeamMP v4.23.1; see

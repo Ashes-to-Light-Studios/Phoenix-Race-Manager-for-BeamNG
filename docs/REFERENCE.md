@@ -378,6 +378,10 @@ Slots are drawn as numbered outlines with a direction arrow, and your own slot
 turns green once the server assigns it. The grid is **saved and loaded with the
 track layout**, so a track is its gates *and* where the cars line up.
 
+Gridding part way round rather than just behind the line? Set **First
+checkpoint** to the first gate ahead of the grid, so the out lap starts there
+(see [Starting part way round](#starting-part-way-round-the-first-checkpoint)).
+
 ### Step 3 - Save it as a layout (so it survives the night)
 
 Scratch saves are local to you; **Track Layouts** (bottom of the editor
@@ -461,7 +465,9 @@ order, ending at the start/finish line, with the next gate lit on screen
 throughout. It is an ordinary lap that simply is not scored: crossing the
 start/finish without having driven the route does not end it, however far round
 you have got. Drive out, clear slot 1, turn round and come back over the line
-and you are still on your out lap, with slot 2 still lit.
+and you are still on your out lap, with slot 2 still lit. On a grid part way
+round it starts at the layout's **First checkpoint** instead of CP 1 (see
+[Starting part way round](#starting-part-way-round-the-first-checkpoint)).
 
 **A point-to-point stage has no out lap.** A sprint is driven once, first gate
 to last - a lap given away there is the whole session given away, and there is
@@ -2104,12 +2110,27 @@ promised, so it is added on top of the allowance.
 
 **The checkpoints are armed and drawn on the first lap like any other lap** - it is
 the lap a driver least knows the circuit, and the worst one to hide the gates on.
-Reaching the **start/finish line** also ends it, from wherever you have got to and
-with slots still owing, so a car gridded past CP 1 is never sent most of the way
-round backwards to arm a gate behind it.
+It ends on the start/finish line like any lap, with the route driven: crossing
+the line with checkpoints still owing does not end it.
 
-A 10-lap race on such a track is **10 racing laps**; the out lap is added on top,
-so the eleventh crossing is the one that ends it.
+#### Starting part way round: the first checkpoint
+
+By default the out lap arms **CP 1**. On a grid part way round the circuit CP 1
+is behind the field, past the line, so the run to the line has nothing lit and
+the out lap then carries on all the way round to CP 1 and back.
+
+In the editor's **Grid** tab, set **First checkpoint** to the first gate ahead
+of the grid. A grid between CP 2 and CP 3 set to `CP 3` lights CP 3 at the green,
+then CP 4, CP 5 and the line. The line ends the out lap, and the next lap starts
+at CP 1 like any other. Pick `Start/finish` for a grid between the last
+checkpoint and the line.
+
+- It is saved with the layout and applies to every out lap on it: a race's,
+  qualifying's, and the pace lap.
+- Anything past CP 1 also marks the grid as off the line, so a short circuit
+  that grids part way round within 250 m of the line still gets its out lap.
+- A sprint stage has no out lap, so the picker is not offered there.
+- Inserting, deleting or reordering checkpoints keeps it on the same gate.
 
 #### Building the grid
 

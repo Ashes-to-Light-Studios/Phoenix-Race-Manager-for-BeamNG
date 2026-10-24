@@ -1611,6 +1611,45 @@ do
   check(lastState.gridOffLine == false, 'and it can be turned back off the same way')
 end
 
+-- THE OUT LAP'S FIRST CHECKPOINT. A grid part way round names the first gate
+-- ahead of it; the server keeps it in range and makes sure the track owes the
+-- out lap it belongs to.
+do
+  RM_onEndRace(1)
+  local startsJson = '[{"x":150,"y":250,"z":51,"hx":1,"hy":0}]'
+  local function saveWith(name, extra, starts)
+    lastLayouts = nil
+    RM_onSaveLayout(1, '{"name":"' .. name .. '","width":20,"checkpoints":' .. cpJson
+      .. (starts == false and '' or (',"startPositions":' .. startsJson)) .. extra .. '}')
+    for _, l in ipairs(lastLayouts and lastLayouts.layouts or {}) do
+      if l.name == name then return l end
+    end
+  end
+
+  local l = saveWith('Part Way Round', ',"firstCheckpoint":2,"gridOffLine":false')
+  check(l and l.firstCheckpoint == 2, 'a first checkpoint is saved with the layout')
+  check(l and l.gridOffLine == true,
+    'and the grid is off the line whatever the client inferred: the setting means nothing without an out lap')
+
+  l = saveWith('Default Start', ',"firstCheckpoint":1')
+  check(l and l.firstCheckpoint == nil, 'CP 1 is stored as nothing, as layouts always were')
+  check(l and l.gridOffLine == false, 'and changes nothing about the grid')
+
+  l = saveWith('Past The End', ',"firstCheckpoint":9')
+  check(l and l.firstCheckpoint == nil, 'a gate past the route is dropped, not clamped to another corner')
+
+  l = saveWith('Stage Start', ',"firstCheckpoint":2,"pointToPoint":true')
+  check(l and l.firstCheckpoint == nil, 'a sprint stores none: it has no out lap')
+
+  l = saveWith('No Grid', ',"firstCheckpoint":2', false)
+  check(l and l.gridOffLine == false, 'with no grid there is no out lap to start part way round')
+
+  RM_onLoadLayout(1, '{"name":"Part Way Round"}')
+  check(lastApplied and lastApplied.firstCheckpoint == 2, 'loading sends it to every client with the gates')
+  RM_onRequestState(1)
+  check(lastState.qualiOutLap == true, 'and a race on it opens with an out lap')
+end
+
 -- Clean up the directory tree the test created in the repo root
 -- ---------------------------------------------------------------------------
 -- A refused admin command answers the client
