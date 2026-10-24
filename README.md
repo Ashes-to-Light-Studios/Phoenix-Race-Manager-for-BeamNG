@@ -108,7 +108,9 @@ drawn in the world **is** the trigger.
 
 Then switch to the **Start Grid** tab and drive to each grid slot *facing down
 the track*, pressing **+ Place Start Position Here**. Slot 1 is pole. Every slot
-stays editable: **Go** to it, **Move Here**, or **✕** to delete.
+stays editable: **Go** to it, **Move Here**, or **✕** to delete. For a grid part
+way round the circuit, set **First checkpoint** to the first gate ahead of it, so
+the untimed out lap starts there instead of at CP 1.
 
 **3. Save it as a layout.** In **Track Layouts**, type a name and press **Save
 As New**. A layout lives on the *server*, survives restarts, and carries the

@@ -2155,6 +2155,8 @@
       <span class="rm-route-tab-note" ng-if="editorTarget === 'start'">
         Slot 1 is pole. Drivers are placed here and held until the countdown ends.
         <b ng-if="gridOffLine">This grid is away from the start/finish line, so the first lap is an out lap and is not timed.</b>
+        <span ng-if="gridOffLine && firstCheckpoint === 1 && routeWaypoints.length > 1 && !pointToPoint">
+          Set <b>First checkpoint</b> below to the first gate ahead of the grid, or the out lap starts at CP 1.</span>
       </span>
       <!-- WHICH SIGN. Sets what the next marker will be, and doubles as the
            legend: the same seven buttons appear on every placed marker's row
@@ -2352,6 +2354,30 @@
         <input type="number" class="rm-lane-num" min="1" ng-model="laneRange.to">
         <button class="rm-btn rm-btn-mini rm-btn-grid" ng-click="flipStartPositions()"
                 title="Turn these slots 180°. Build one block, flip half of it, and that is a head-on grid.">↻ Turn Around</button>
+      </div>
+      <!-- WHERE THE OUT LAP STARTS. A grid part way round meets some checkpoint
+           before the line; arming CP 1 left that whole run with nothing lit.
+           Anything past CP 1 also makes the first lap an out lap. -->
+      <div class="rm-lanes-row" ng-if="routeWaypoints.length > 1 && !pointToPoint">
+        <label class="rm-lane-label">First checkpoint</label>
+        <div class="rm-layout-dropdown rm-lane-picker"
+             ng-class="{'rm-layout-dropdown-open': laneMenuOpen('firstCp')}">
+          <button type="button" class="rm-layout-trigger" ng-click="laneToggleMenu('firstCp')"
+                  ng-disabled="!canEdit()"
+                  title="The first gate drivers are sent to from the grid. The run from the grid to the line is an untimed out lap.">
+            <span class="rm-layout-trigger-label">{{ checkpointName(firstCheckpoint) }}</span>
+            <span class="rm-layout-caret">▾</span>
+          </button>
+          <div class="rm-layout-menu" ng-if="laneMenuOpen('firstCp')">
+            <div class="rm-layout-option" ng-repeat="s in routeSlots() track by s"
+                 ng-class="{'rm-layout-option-active': s === firstCheckpoint}"
+                 ng-click="pickFirstCheckpoint(s)">{{ checkpointName(s) }}</div>
+          </div>
+        </div>
+        <span class="rm-route-tab-note" ng-if="firstCheckpoint > 1">
+          The out lap runs from the grid through <b>{{ checkpointName(firstCheckpoint) }}</b> to the line.
+          It is not timed; in a race it counts as lap 1.
+        </span>
       </div>
     </div>
 

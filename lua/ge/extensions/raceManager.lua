@@ -293,6 +293,9 @@ local track = {
   -- A point-to-point layout filed as a drag strip. Saved with the layout; only
   -- true while pointToPoint is.
   dragStrip = false,
+  -- The gate an out lap arms first, by number (branch.firstGate). Past 1 for a
+  -- grid part way round. Travels with the layout.
+  firstCheckpoint = 1,
   -- Size given to newly placed gates, and the layout's stored default for any
   -- gate without an override of its own.
   checkpointWidth  = TUNE.DEFAULT_WIDTH,
@@ -938,15 +941,18 @@ end
 -- ---------------------------------------------------------------------------
 -- UI push helpers
 -- ---------------------------------------------------------------------------
--- Last start-position count reported, so it is sent only on a change.
+-- Last start-position count reported, with the out-lap answer folded in, so
+-- it is sent only on a change.
 local lastReportedStarts = nil
 -- Report the grid's count and positions; the server polices the hold by
 -- distance itself.
 local function reportStartCount()
   if not inMultiplayer() then return end
   local n = #track.startPositions
-  if n == lastReportedStarts then return end
-  lastReportedStarts = n
+  -- The First checkpoint picker flips gridOffLine without moving a slot.
+  local key = n * 2 + (branch.gridIsOff() and 1 or 0)
+  if key == lastReportedStarts then return end
+  lastReportedStarts = key
   local positions = {}
   for i, sp in ipairs(track.startPositions) do
     positions[i] = { x = sp.x, y = sp.y, z = sp.z, hx = sp.hx, hy = sp.hy }
@@ -1033,6 +1039,7 @@ function edit.fingerprint()
   fold(track.startPositions)
   fold(branch.list)
   fold(props.list)
+  n = (n * 31 + (track.firstCheckpoint or 1)) % 2147483647
   return n
 end
 
@@ -1122,6 +1129,7 @@ local function pushRouteState()
     branches     = branch.list,
     branchSlot   = branch.editSlot,
     gridOffLine  = branch.gridIsOff(),
+    firstCheckpoint = branch.firstGate(),
     -- A generated grid the spacing sliders may move; hand-placed is left alone.
     gridGenerated = branch.gridTool.generated,
     gridSpacing   = branch.gridTool.spacing,
@@ -1337,15 +1345,19 @@ local function resetLapTracking()
   block.noticeLeft = 0   -- a fresh session may report its first blocked attempt at once
   -- Report a distance on the next frame.
   progressLeft = 0
-  -- Live from GO: the first target is checkpoint 1, qualifying included.
+  -- Live from GO: the first target is checkpoint 1, qualifying included, or
+  -- the layout's first checkpoint when the session opens on an out lap. That
+  -- lap ends at the line like any other, so starting it part way round only
+  -- skips gates behind the grid. qualiOutLap arrives before the phase edge.
   -- Outside a session the S/F line is armed, for sensible gate colors.
+  local first = (qualiOutLap and not track.pointToPoint) and branch.firstGate() or 1
   if sessionRunning() then
-    session.armedWp = 1
+    session.armedWp = first
     session.timingActive = true
   elseif session.phase == 'grid' or session.phase == 'countdown' then
-    -- On the grid the gate ahead is checkpoint 1, as it will be at GO.
+    -- On the grid the gate ahead is the one GO will arm.
     -- Presentation only: checkGates does not run outside a session.
-    session.armedWp = 1
+    session.armedWp = first
   else
     session.armedWp = math.max(#track.route, 1)
   end
@@ -1385,6 +1397,7 @@ local function clearTrackState(reason)
   branch.bySlot = {}
   branch.gridOffLine = false
   branch.editSlot    = 1
+  track.firstCheckpoint = 1
   pushRouteState()
   log('I', 'raceManager', 'Track state cleared (' .. tostring(reason or 'local') .. ')')
 end
@@ -1520,11 +1533,13 @@ end
 -- Branching routes. On a track with no branch gates bySlot[i] is nil, so this
 -- costs one index more than testing the main gate alone.
 -- Does this track grid away from the S/F line? Inferred, never a switch:
+--   * a first checkpoint past CP 1 (the admin saying the grid is part way round),
 --   * a start position facing AGAINST the line (a head-on layout), or
 --   * one further from it than any grid is long (GRID_ON_LINE_RANGE).
 function branch.gridIsOff()
   local sf = track.route[#track.route]
   if not sf or #track.startPositions == 0 then return false end
+  if branch.firstGate() > 1 then return true end
   local r2 = TUNE.GRID_ON_LINE_RANGE * TUNE.GRID_ON_LINE_RANGE
   for _, sp in ipairs(track.startPositions) do
     if (sp.hx or 0) * (sf.hx or 0) + (sp.hy or 1) * (sf.hy or 1) < 0 then return true end
@@ -1532,6 +1547,15 @@ function branch.gridIsOff()
     if dx * dx + dy * dy > r2 then return true end
   end
   return false
+end
+
+-- The gate an out lap arms first. Clamped here rather than on every edit, so a
+-- route shortened under it falls back to CP 1 instead of arming nothing. The
+-- S/F line itself is allowed: a grid between the last checkpoint and the line.
+function branch.firstGate()
+  local f = math.floor(tonumber(track.firstCheckpoint) or 1)
+  if f < 1 or f > #track.route then return 1 end
+  return f
 end
 
 function branch.crossedAt(i, p0, p1)
@@ -6406,6 +6430,16 @@ function M.setBranchSlot(slot)
   pushRouteState()
 end
 
+-- The gate the out lap arms first. The S/F line counts: a grid can sit between
+-- the last checkpoint and the line.
+function M.setFirstCheckpoint(slot)
+  slot = math.floor(tonumber(slot) or 1)
+  if slot < 1 or slot > #track.route then slot = 1 end
+  track.firstCheckpoint = slot
+  pushRouteState()
+  log('I', 'raceManager', 'Out lap starts at checkpoint ' .. slot)
+end
+
 -- Re-point a placed branch gate at another checkpoint (two on one is fine).
 function M.setBranchGateSlot(index, slot)
   index = math.floor(tonumber(index) or 0)
@@ -6666,6 +6700,9 @@ function branch.shiftSlots(from, delta)
     local s = tonumber(g.slot)
     if s and s >= from then g.slot = s + delta end
   end
+  -- The out lap's first checkpoint is addressed by number too.
+  local f = track.firstCheckpoint or 1
+  if f > 1 and f >= from then track.firstCheckpoint = math.max(f + delta, 1) end
 end
 
 -- Drop the branch gates of a checkpoint that is going away.
@@ -6762,6 +6799,11 @@ function M.reorderCheckpoint(from, to)
       local s = tonumber(g.slot)
       if s == from then g.slot = to
       elseif s and s >= lo and s <= hi then g.slot = s + step end
+    end
+    local f = track.firstCheckpoint or 1
+    if f > 1 then
+      if f == from then track.firstCheckpoint = to
+      elseif f >= lo and f <= hi then track.firstCheckpoint = f + step end
     end
     branch.rebuild()
   end
@@ -7183,6 +7225,8 @@ function M.saveLayout(name, confirmDrop)
     branches       = alts,
     -- Inferred, never asked for (see branch.gridIsOff).
     gridOffLine    = branch.gridIsOff(),
+    -- nil for CP 1, so a layout that never set it saves as it did.
+    firstCheckpoint = branch.firstGate() > 1 and branch.firstGate() or nil,
     pits           = bundle(track.pitRoute, 'pit stall') or {},
     -- Empty tables, not nil, so a re-save never drops the lane's gates.
     pitEntry       = bundle(track.pitEntry, 'pit entry') or {},
@@ -7373,7 +7417,7 @@ for _, name in ipairs({
   'setCheckpointOverride', 'setPitStallSize', 'setPointToPoint',
   'moveStartPosition', 'removeStartPosition',
   'generateStartPositions', 'respaceGrid', 'flipStartPositions',
-  'setBranchSlot', 'setBranchGateSlot', 'removeBranchGate',
+  'setBranchSlot', 'setBranchGateSlot', 'removeBranchGate', 'setFirstCheckpoint',
   'nudgeTurn', 'nudgeLift', 'nudgeDelete',
 }) do
   local inner = M[name]
@@ -8055,6 +8099,8 @@ local function onApplyLayout(rawData)
   branch.list   = alts
   branch.bySlot = bySlot
   branch.gridOffLine = data.gridOffLine == true
+  -- Clamped where it is read (branch.firstGate); absent is CP 1.
+  track.firstCheckpoint = math.floor(tonumber(data.firstCheckpoint) or 1)
   track.checkpointWidth  = clampWidth(data.width or track.checkpointWidth)
   -- The layout's default is migrated the same way, or new gates stand twice
   -- as tall as the loaded ones.

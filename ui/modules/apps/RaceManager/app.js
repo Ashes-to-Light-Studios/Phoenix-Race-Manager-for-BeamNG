@@ -152,6 +152,7 @@ angular.module('beamng.apps')
       $scope.propLabels = {};
       $scope.branchSlot = 1;       // checkpoint the next placed branch gate belongs to
       $scope.gridOffLine = false;  // grid is away from the line, so an out lap is owed
+      $scope.firstCheckpoint = 1;  // the gate an out lap arms first
       $scope.hasBranches = false;  // mirrored from the server: any branch gates on this track?
       // Bound with ng-model from inside ng-if blocks, so every one of these has to
       // hang off an object: a bare primitive is shadowed on the child scope
@@ -2338,6 +2339,7 @@ var rectSeen = { width: null, length: null, rot: null, wall: null, wallDepth: nu
           if (data.propLabels) { $scope.propLabels = data.propLabels; }
           if (typeof data.branchSlot === 'number') { $scope.branchSlot = data.branchSlot; }
           $scope.gridOffLine = !!data.gridOffLine;
+          $scope.firstCheckpoint = data.firstCheckpoint || 1;
           // The spacing sliders are only offered while the generator owns a
           // block of slots; hand-placing, moving or dropping one lets go of it.
           $scope.gridGenerated = !!data.gridGenerated;
@@ -2473,6 +2475,14 @@ var rectSeen = { width: null, length: null, rot: null, wall: null, wallDepth: nu
       $scope.pickGateSlot = function (index, s) {
         $scope.laneUi.menu = null;
         $scope.setBranchGateSlot(index, s);
+      };
+      $scope.pickFirstCheckpoint = function (s) {
+        $scope.laneUi.menu = null;
+        bngApi.engineLua('raceManager.setFirstCheckpoint(' + (parseInt(s, 10) || 1) + ')');
+      };
+      // The last gate is the line, and the picker offers it by that name.
+      $scope.checkpointName = function (s) {
+        return s === $scope.routeWaypoints.length ? 'Start/finish' : 'CP ' + s;
       };
       $scope.setBranchSlot = function (slot) {
         bngApi.engineLua('raceManager.setBranchSlot(' + (parseInt(slot, 10) || 1) + ')');

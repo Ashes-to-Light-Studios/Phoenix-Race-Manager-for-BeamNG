@@ -109,6 +109,7 @@ local SCALARS = {
   'nextWp', 'width', 'height', 'depth', 'pointToPoint', 'gridSlot', 'gridFrozen',
   'pitActive', 'pitLeft', 'jokerNext', 'jokerTaken', 'jokerLap', 'jokerEnabled',
   'editorTarget', 'driverFlag', 'nudgeOn', 'nudgeSel', 'branchSlot', 'gridOffLine',
+  'firstCheckpoint',
   'gridGenerated', 'gridSpacing', 'gridStagger', 'gridWidth', 'maxResets',
   'resetsUsed', 'visualize', 'isAdmin',
 }
