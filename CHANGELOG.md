@@ -6,7 +6,7 @@ tag, the packaged zip, and the build stamp the app shows - see the note in
 
 [← Back to the README](README.md)
 
-## Unreleased - Start the out lap part way round
+## 0.20.4 - Start the out lap part way round
 
 #### Added
 

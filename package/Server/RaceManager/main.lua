@@ -1113,7 +1113,7 @@ local RM_PROTOCOL = 2
 --   tools/deploy.py                      RELEASE_NAME
 --
 -- tests/wiring_test.lua fails if they disagree.
-local RM_BUILD = '0.20.3'
+local RM_BUILD = '0.20.4'
 
 -- The ghost roster on the wire: absolute END times on race.time, so a late
 -- client works out a shorter remainder, never a longer one.
@@ -5440,6 +5440,9 @@ function RM_onSaveLayout(pid, rawData)
 
   local map = getCurrentMap()
   local starts = sanitizeCheckpoints(data.startPositions)
+  -- The gate the out lap arms first; nil is CP 1. A sprint has no out lap.
+  local first = math.floor(tonumber(data.firstCheckpoint) or 1)
+  if first <= 1 or first > #checkpoints or data.pointToPoint == true then first = nil end
   -- What is stored under this name already, for the silent-drop guard below.
   local existing = nil
   for _, l in ipairs(getLayouts()) do
@@ -5471,8 +5474,10 @@ function RM_onSaveLayout(pid, rawData)
     practice     = (data.practice == true) or (existing ~= nil and existing.practice == true),
     -- Optional branch gates, validated against the route length.
     branches     = sanitizeBranches(data.branches, #checkpoints),
-    -- Grid off the S/F line (see outLapOwed).
-    gridOffLine  = data.gridOffLine == true,
+    -- Grid off the S/F line (see outLapOwed). A first checkpoint says so too,
+    -- or it would be saved on a track that never runs an out lap.
+    gridOffLine  = data.gridOffLine == true or (first ~= nil and starts ~= nil and #starts > 0),
+    firstCheckpoint = first,
   }
   -- A branch array sent but invalid rejects the save.
   if data.branches ~= nil and not entry.branches then
