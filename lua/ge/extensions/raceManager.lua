@@ -2753,6 +2753,9 @@ end
 -- This client's results copies, inside BeamNG's user folder: exploreFolder
 -- refuses anything outside the virtual filesystem. On M for the locals ceiling.
 M.RESULTS_LOCAL_DIR = 'settings/raceManager/results'
+-- The server never sends over 60000 bytes (MAX_RESULTS_PUSH), so anything
+-- bigger is not a results file and does not reach the disk.
+M.RESULTS_LOCAL_MAX = 65536
 
 -- A copy of the results for an admin who is not the server owner. The server's
 -- copy stays the record.
@@ -2761,21 +2764,35 @@ function M.onResultsFile(rawData)
   if not ok or type(data) ~= 'table' then return end
   local text = tostring(data.text or '')
   if text == '' then return end
-  -- Sanitised: this arrives over the wire and becomes a filename.
-  local name = tostring(data.name or 'results.txt'):gsub('[^%w%-_%.]', '_')
-  if name == '' then name = 'results.txt' end
+  if #text > M.RESULTS_LOCAL_MAX then
+    log('W', 'raceManager', 'Results copy refused: ' .. #text .. ' bytes')
+    pushNotice('session', 'Results too large to copy: the server copy is complete')
+    return
+  end
+  -- ONLY THE SHAPE THE SERVER WRITES, else a name of our own. This is the folder
+  -- My Results opens in Explorer, which hides known extensions, and Clear My
+  -- Results deletes .txt only: a results.txt.cmd from a server would sit there.
+  local name = tostring(data.name or '')
+  if #name > 64 or not name:match('^[A-Za-z_]*results_[%d_%-]+%.txt$') then
+    name = 'results_' .. os.date('%Y-%m-%d_%H-%M-%S') .. '.txt'
+    log('W', 'raceManager', 'Results copy: unexpected file name from the server, saved as ' .. name)
+  end
 
   if FS and FS.directoryCreate then pcall(function () FS:directoryCreate(M.RESULTS_LOCAL_DIR, true) end) end
   local path = M.RESULTS_LOCAL_DIR .. '/' .. name
   local wrote = false
   if type(writeFile) == 'function' then
-    wrote = pcall(writeFile, path, text) and true or false
+    -- writeFile RETURNS nil on failure rather than raising: pcall alone reads
+    -- every failed write as saved.
+    local called, done = pcall(writeFile, path, text)
+    wrote = called and done == true
   else
     local f = io.open(path, 'w')
     if f then f:write(text); f:close(); wrote = true end
   end
   if not wrote then
     log('W', 'raceManager', 'Could not write a local results copy to ' .. path)
+    pushNotice('session', 'Could not save your results copy: the server copy is complete')
     return
   end
   log('I', 'raceManager', 'Results saved locally: ' .. path .. ' (' .. #text .. ' bytes)')

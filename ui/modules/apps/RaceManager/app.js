@@ -1009,20 +1009,22 @@ angular.module('beamng.apps')
         bngApi.engineLua('raceManager.cupReset()');
         $scope.cupUi.confirmReset = false;
       };
+      // A saved preset's key is another admin's typing, and the server
+      // preselects it here: through luaStr, or a quote in it runs on Load.
       $scope.cupApplyPreset = function () {
         if (!$scope.cupUi.preset) { return; }
         cupExpectReseed('race');
-        bngApi.engineLua('raceManager.cupSetPreset("' + $scope.cupUi.preset + '", "race")');
+        bngApi.engineLua('raceManager.cupSetPreset(' + luaStr($scope.cupUi.preset) + ', "race")');
       };
       $scope.cupApplyDerbyPreset = function () {
         if (!$scope.cupUi.derbyPreset) { return; }
         cupExpectReseed('derby');
-        bngApi.engineLua('raceManager.cupSetPreset("' + $scope.cupUi.derbyPreset + '", "derby")');
+        bngApi.engineLua('raceManager.cupSetPreset(' + luaStr($scope.cupUi.derbyPreset) + ', "derby")');
       };
       $scope.cupApplyDragPreset = function () {
         if (!$scope.cupUi.dragPreset) { return; }
         cupExpectReseed('drag');
-        bngApi.engineLua('raceManager.cupSetPreset("' + $scope.cupUi.dragPreset + '", "drag")');
+        bngApi.engineLua('raceManager.cupSetPreset(' + luaStr($scope.cupUi.dragPreset) + ', "drag")');
       };
       // Save the race table as a named system, in the SAME picker as the built-ins
       // (the server flags its own for Delete). The name is on cupUi: a bare
@@ -1141,7 +1143,7 @@ angular.module('beamng.apps')
       $scope.cupApplyBonus = function (row) {
         if (!row) { return; }
         var value = Math.max(0, Math.floor(Number($scope.cupUi.bonus[row.key]) || 0));
-        bngApi.engineLua('raceManager.cupSetBonus("' + row.key + '", ' + value + ')');
+        bngApi.engineLua('raceManager.cupSetBonus(' + luaStr(row.key) + ', ' + value + ')');
       };
       $scope.cupBonusRowDirty = function (row) {
         if (!row) { return false; }
@@ -3111,7 +3113,7 @@ var rectSeen = { width: null, length: null, rot: null, wall: null, wallDepth: nu
         var lives = parseInt($scope.derbyUi.lives, 10);
         if (isNaN(lives) || lives < 1) { lives = 1; }
         bngApi.engineLua('raceManager.derbySetConfig(' + oob + ', ' + demo + ', '
-          + resets + ', ' + lives + ", '" + ($scope.derbyUi.mode || 'lms') + "')");
+          + resets + ', ' + lives + ', ' + luaStr($scope.derbyUi.mode || 'lms') + ')');
       };
 
       // ----------------------------------------------------------------
@@ -3329,10 +3331,10 @@ var rectSeen = { width: null, length: null, rot: null, wall: null, wallDepth: nu
         if (isNaN(cut) || cut < 0) { cut = 0; }
         if (isNaN(rounds) || rounds < 1) { rounds = 1; }
         if (isNaN(timeout) || timeout < 10) { timeout = 10; }
-        bngApi.engineLua("raceManager.dragSetConfig('" + (u.format || 'single')
-          + "', " + lanes + ', ' + advance + ', ' + cut + ', ' + rounds
-          + ", '" + (u.tree || 'sportsman') + "', '" + (u.seed || 'random')
-          + "', " + (u.dialIn ? 'true' : 'false') + ', '
+        bngApi.engineLua('raceManager.dragSetConfig(' + luaStr(u.format || 'single')
+          + ', ' + lanes + ', ' + advance + ', ' + cut + ', ' + rounds
+          + ', ' + luaStr(u.tree || 'sportsman') + ', ' + luaStr(u.seed || 'random')
+          + ', ' + (u.dialIn ? 'true' : 'false') + ', '
           + (u.breakout ? 'true' : 'false') + ', ' + timeout + ')');
       };
       // Applies at once: it changes which boxes are on screen (as derbySetMode).
@@ -3355,8 +3357,8 @@ var rectSeen = { width: null, length: null, rot: null, wall: null, wallDepth: nu
       $scope.dragApplyStaging = function () {
         var wait = parseInt($scope.dragUi.stageWait, 10);
         if (isNaN(wait) || wait < 5) { wait = 5; }
-        bngApi.engineLua("raceManager.dragSetStaging('"
-          + ($scope.dragUi.stageMode || 'rollup') + "', "
+        bngApi.engineLua('raceManager.dragSetStaging('
+          + luaStr($scope.dragUi.stageMode || 'rollup') + ', '
           + ($scope.dragUi.autoStart ? 'true' : 'false') + ', ' + wait + ')');
       };
       $scope.dragSetStageMode = function (m) {
@@ -3732,9 +3734,11 @@ var rectSeen = { width: null, length: null, rot: null, wall: null, wallDepth: nu
       // ------------------------------------------------------------------
       // UI -> LUA commands (admin authentication)
       // ------------------------------------------------------------------
-      // Layout/password strings go through engineLua as Lua string literals.
+      // Splice strings into engineLua only through this, typed or sent by the
+      // server: a saved name is somebody else's text, and a quote in it runs as
+      // Lua on this PC. CR or LF ends a Lua string, so both become spaces.
       function luaStr(s) {
-        return "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, ' ') + "'";
+        return "'" + String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/[\r\n]/g, ' ') + "'";
       }
 
       $scope.login = function () {

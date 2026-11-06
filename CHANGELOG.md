@@ -29,6 +29,25 @@ tag, the packaged zip, and the build stamp the app shows - see the note in
   respaced, dragged, turned or lowered, and the generator follows the road out
   from pole a few meters at a time. A dragged slot now follows the ground down
   a hill too, rather than being left in the air.
+- **"Results saved to your own copy" showed when nothing was saved.** BeamNG's
+  `writeFile` returns nil on failure rather than raising, and the check only
+  caught a raise. A failed save now says so.
+
+#### Security
+
+- **A saved scoring system's name could run code on another admin's game.**
+  The cup panel pasted a saved system's key straight into the Lua it runs on
+  **Load**, and the picker preselects whatever was last applied, so a name with
+  a quote in it closed the string and ran the rest on whoever pressed Load. A
+  moderator can save one. Preset and bonus keys, and the drag and derby modes,
+  now reach Lua escaped like every typed name, a saved name is held to the cup
+  name's rule (letters, digits, spaces and `- _ .`), and names an older build
+  stored in `cup.json` are cleaned when it loads, rather than lost.
+- **The results copy keeps only the server's file name.** Anything else is
+  saved under a dated `results_<date>_<time>.txt` instead, so a name like
+  `results.txt.cmd` cannot land in the folder **My Results** opens: Explorer
+  hides known extensions, and **Clear My Results** only deletes `.txt`. A copy
+  over 64 KB, more than the server ever sends, is refused.
 
 ## 0.20.4 - Start the out lap part way round
 

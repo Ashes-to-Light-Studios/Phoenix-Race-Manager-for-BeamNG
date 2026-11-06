@@ -755,6 +755,13 @@ the fewest.
 **If a cup is running**, the file ends with the championship round this race
 just banked - see [Cup points in the results file](#cup-points-in-the-results-file).
 
+**Your own copy.** When a race closes, every logged-in admin and moderator is
+sent its results file, saved in `settings/raceManager/results/` in the BeamNG
+user folder (**My Results** opens it). It keeps the server's file name,
+`results_<date>_<time>.txt`, and nothing else: any other name is replaced by a
+dated one, so nothing but a results file lands in that folder. A file over
+60 KB is not sent, and chat says so; the server's copy is complete.
+
 Housekeeping:
 
 - **Reset** wipes the session back to Waiting with fresh driver records,
@@ -2611,6 +2618,11 @@ preset is a starting point, not a mode.
 
 A position past the last non-zero entry scores **nothing**, which is what makes
 a short table legal: 25P Aggressive simply pays no-one from P11 back.
+
+**Save system** keeps the race table under a name of your own, in the same
+picker, and **End Cup** leaves it alone. A saved name reaches every admin's
+panel, so it is held to the cup name's rule: letters, digits, spaces and
+`- _ .`, anything else refused.
 
 ### What a DNF is worth
 

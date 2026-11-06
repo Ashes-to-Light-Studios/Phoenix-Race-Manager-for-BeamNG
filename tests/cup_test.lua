@@ -1133,6 +1133,62 @@ do
     'and resuming picks it straight back up')
 end
 
+-- ---------------------------------------------------------------------------
+-- A SAVED SYSTEM'S NAME REACHES EVERY ADMIN'S LUA
+-- ---------------------------------------------------------------------------
+-- The panel splices a preset key into the Lua it runs on Load, and preselects
+-- whatever the server last applied, so a quote in a saved name ran code on
+-- whoever pressed Load. A moderator can save one. The panel escapes it now
+-- (ui_bindings_test); the server refuses it on save and cleans it on load.
+do
+  local function unsafeKey()
+    for _, p in ipairs(lastCup and lastCup.presets or {}) do
+      if p.key:find('[^%w %-%_%.:]') then return p.key end
+    end
+    return nil
+  end
+  -- JSON for x")os.execute"calc"-- : it closes the string and runs a call.
+  local HOSTILE = 'x\\")os.execute\\"calc\\"--'
+
+  RM_onChangePassword(ADMIN, '{"password":"tuesday","role":"moderator"}')
+  RM_onLogin(3, '{"password":"tuesday"}')
+  RM_onCupSetScoring(ADMIN, '{"race":[3,2,1]}')
+  lastChat = nil
+  RM_onCupSavePreset(3, '{"name":"' .. HOSTILE .. '"}')
+  RM_onCupRequestState(ADMIN)
+  check(unsafeKey() == nil, 'a moderator cannot save a scoring system whose name carries a quote')
+  check(lastChat ~= nil and lastChat:find('letters, digits', 1, true) ~= nil,
+    'and is told which characters a name can use')
+  RM_onCupSavePreset(3, '{"name":"Tuesday Club"}')
+  check(presetByKey('saved:tuesday club') ~= nil,
+    'a plain name still saves: saving one stays a moderator job')
+
+  -- Older builds stored any name. Their cup.json must not carry one back in.
+  local f = assert(io.open(CUP, 'w'))
+  f:write('{"version":1,"enabled":false,"name":"","round":0,"savedPresets":['
+    .. '{"key":"saved:' .. HOSTILE .. '","label":"' .. HOSTILE .. '","race":[10,5]},'
+    .. '{"key":"saved:bob\'s league","label":"Bob\'s League","race":[9,6,3]},'
+    .. '{"key":"saved:bobs league","label":"Bobs League","race":[1]},'
+    .. '7,{"label":"   ","race":[4]}]}')
+  f:close()
+  lastCup = nil
+  local booted = pcall(bootPlugin) and pcall(RM_onCupRequestState, ADMIN)
+  check(booted and lastCup ~= nil, 'a cup.json from an older build still loads, junk and all')
+  check(lastCup ~= nil and unsafeKey() == nil,
+    'and no stored key reaches the panel: each is rebuilt from its cleaned name')
+  local kept = lastCup and presetByKey('saved:bobs league')
+  check(kept and kept.label == 'Bobs League',
+    'an old name with an apostrophe is cleaned and kept, not lost')
+  local copies = 0
+  for _, p in ipairs(lastCup and lastCup.presets or {}) do
+    if p.key == 'saved:bobs league' then copies = copies + 1 end
+  end
+  check(copies == 1, 'two names that clean to one are offered once: the picker is keyed on it')
+  RM_onCupSetPreset(ADMIN, '{"preset":"saved:bobs league","target":"race"}')
+  check(lastCup and #lastCup.racePoints == 3 and lastCup.racePoints[1] == 9,
+    'and the first of them keeps it')
+end
+
 if fails == 0 then
   print('cup_test: ' .. checks .. ' checks, 0 failures')
 else

@@ -7345,17 +7345,23 @@ local function loadCupFromDisk()
   cup.round   = math.max(math.floor(tonumber(data.round) or 0), 0)
 
   -- Saved systems, sanitised like a live table; a nameless or empty one is dropped.
+  -- The label is cleaned to the save rule and the key REBUILT from it, never read:
+  -- the panel splices the key into Lua, and older builds stored any characters.
+  -- Cleaning can merge two names; the first keeps the key, because the picker's
+  -- `track by p.key` throws on a duplicate.
   cup.savedPresets = {}
   if type(data.savedPresets) == 'table' then
+    local seen = {}
     for _, p in ipairs(data.savedPresets) do
-      local label = type(p.label) == 'string' and p.label or nil
-      local tbl   = cupSanitizeTable(p.race)
-      if label and label ~= '' and #tbl > 0 then
-        cup.savedPresets[#cup.savedPresets + 1] = {
-          key   = type(p.key) == 'string' and p.key or ('saved:' .. label:lower()),
-          label = label,
-          race  = tbl,
-        }
+      if type(p) == 'table' then
+        local label = type(p.label) == 'string' and p.label or ''
+        label = label:gsub('[^%w %-%_%.]', ''):gsub('%s+', ' '):gsub('^ ', ''):gsub(' $', '')
+        local key = 'saved:' .. label:lower()
+        local tbl = cupSanitizeTable(p.race)
+        if label ~= '' and #tbl > 0 and not seen[key] then
+          seen[key] = true
+          cup.savedPresets[#cup.savedPresets + 1] = { key = key, label = label, race = tbl }
+        end
       end
     end
   end
@@ -8136,9 +8142,16 @@ function RM_onCupSavePreset(pid, rawData)
   if not requireAuth(pid) then return end
   local name = decodeString(rawData, 'name')
   if type(name) ~= 'string' then return end
-  name = name:gsub('^%s+', ''):gsub('%s+$', '')
+  name = name:gsub('%s+', ' '):gsub('^ ', ''):gsub(' $', '')
   if name == '' then
     MP.SendChatMessage(pid, '[RaceManager] A saved scoring system needs a name.')
+    return
+  end
+  -- The cup name's rule. A moderator can save one, and the key is spliced into
+  -- Lua in every admin's panel: luaStr escapes it there, this keeps it plain.
+  if name:find('[^%w %-%_%.]') then
+    MP.SendChatMessage(pid, '[RaceManager] A scoring system name can use letters, '
+      .. 'digits, spaces and - _ . only.')
     return
   end
   if #name > MAX_PRESET_NAME then name = name:sub(1, MAX_PRESET_NAME) end
