@@ -699,6 +699,41 @@ expect(html:find('p in cup.presets', 1, true) ~= nil,
   'the preset picker is filled from the server list')
 
 -- ---------------------------------------------------------------------------
+-- 4d3. A string the server sent reaches engineLua only through luaStr
+--
+-- A saved preset's key is another admin's typing, and the picker preselects
+-- whatever the server last applied. Spliced raw between quotes, a quote in it
+-- ran as Lua on whoever pressed Load. The drag and derby modes and the bonus
+-- keys come back from the server the same way.
+-- ---------------------------------------------------------------------------
+local function statements(call)
+  local out, from = {}, 1
+  while true do
+    local s = js:find('raceManager.' .. call .. '(', from, true)
+    if not s then break end
+    local e = js:find(');', s, true) or #js
+    out[#out + 1] = js:sub(s, e)
+    from = e + 1
+  end
+  return out
+end
+for _, call in ipairs({ 'cupSetPreset', 'cupSetBonus', 'dragSetConfig',
+                        'dragSetStaging', 'derbySetConfig' }) do
+  local found = statements(call)
+  expect(#found > 0, 'found the engineLua call for ' .. call)
+  for _, stmt in ipairs(found) do
+    expect(stmt:find('luaStr(', 1, true) ~= nil,
+      call .. ': its string argument goes through luaStr')
+    -- A JS literal ending in a Lua quote, then +: a value spliced raw.
+    expect(stmt:find('["\'][\'"]%s*%+') == nil,
+      call .. ': no value is spliced raw between quotes: ' .. stmt:sub(1, 80))
+  end
+end
+local luaStrBody = js:match('function luaStr%(s%) {(.-)\n      }')
+expect(luaStrBody ~= nil and luaStrBody:find('[\\r\\n]', 1, true) ~= nil,
+  'luaStr turns CR as well as LF into a space: either one ends a Lua string')
+
+-- ---------------------------------------------------------------------------
 -- 4c. Derbies score into the same cup
 --
 -- A cup may be all races, all derbies or a mixture. The two score on separate
