@@ -328,11 +328,12 @@ local function slotGeometry(sp)
   return g
 end
 
-local function drawStartPosition(sp, index, mine)
+-- `held`: picked in the editor, drawn in Place mode's magenta.
+local function drawStartPosition(sp, index, mine, held)
   local g = slotGeometry(sp)
   local p = palette()
-  local color = mine and p.slotMine
-    or (index == 1 and p.slotPole or p.slotOther)
+  local color = held and p.nudged or (mine and p.slotMine
+    or (index == 1 and p.slotPole or p.slotOther))
   local c = g.c
   for i = 1, 4 do
     debugDrawer:drawCylinder(c[i], c[i % 4 + 1], 0.08, color)
@@ -353,8 +354,12 @@ local function drawStartPositions()
   if not edit.open then return end
   -- Inside the editor, the Hide/Show Gates toggle applies.
   if not edit.visualize then return end
+  -- Picks show on the Grid tab only, where they can be acted on.
+  local picked = edit.target == 'start' and branch.gridTool.picked or nil
+  local sel = nudge.on and nudge.list == track.startPositions and nudge.sel or nil
   for i, sp in ipairs(track.startPositions) do
-    drawStartPosition(sp, i, session.gridSlot == i)
+    local held = picked and (picked[sp] or sel == i) or false
+    drawStartPosition(sp, i, session.gridSlot == i, held)
   end
 end
 

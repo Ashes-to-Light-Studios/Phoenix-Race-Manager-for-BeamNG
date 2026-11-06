@@ -509,6 +509,12 @@ end
 wired('setQualiLimits',     'applyQualiLimits',   'Qualifying limits')
 wired('moveStartPosition',  'moveStartPosition',  'Move start position')
 wired('removeStartPosition','removeStartPosition','Remove start position')
+-- Picking slots to move as one block, and moving them.
+wired('pickStartPosition',        'toggleSlotPick', 'Pick a start position')
+wired('pickAllStartPositions',    'pickAllSlots',   'Pick all or no start positions')
+wired('movePickedStartPositions', 'movePickedHere', 'Move picked start positions')
+expect(js:find('$scope.gridPicked = toArray(data.gridPicked)', 1, true) ~= nil,
+  'the panel shows the picks the client holds, not the ones it asked for')
 wired('derbySaveLayout',    'derbySaveLayout',    'Derby arena save')
 wired('derbyLoadLayout',    'derbyLoadLayout',    'Derby arena load')
 -- The derby arena is editable entry by entry, the same way the race grid is.

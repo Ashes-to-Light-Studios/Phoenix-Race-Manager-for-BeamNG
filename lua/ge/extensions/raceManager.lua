@@ -70,6 +70,12 @@ local TUNE = {
   -- lowest surface above it wins and overhead geometry is never reached.
   GROUND_RESCUE_STEPS = { 2, 5, 12, 30, 60, 150 },
   GROUND_PROBE_DOWN = 200,
+  -- A grid slot's ground rays start this far above the height they look near. A
+  -- ray that starts underground hits nothing, so probing from the slot itself
+  -- missed a road climbing past it and found the terrain under a deck instead.
+  SLOT_PROBE_UP = 2.5,
+  -- Longest step when walking the ground out to a new slot from a known one.
+  SLOT_PROBE_STEP = 3,
   -- Last Checkpoint respawn (snapshot.trackZ). Heights above the road to look
   -- for a higher surface at the gate's center, for a car that crossed low on a
   -- banking. Short steps first, so an arch over the line is never reached.
@@ -1135,6 +1141,7 @@ local function pushRouteState()
     gridSpacing   = branch.gridTool.spacing,
     gridStagger   = branch.gridTool.stagger,
     gridWidth     = branch.gridTool.width,
+    gridPicked    = branch.pickedIndices(),
     -- Reset ruleset (Module 1)
     maxResets    = session.maxResets,
     resetsUsed   = session.resetsUsed,
@@ -6169,6 +6176,8 @@ function nudge.place(list, hit, ray)
     M.editorAdd(place)
     nudge.sel = #list
   end
+  -- A new slot is the pick, alone.
+  if edit.target == 'start' then branch.pick(nudge.sel, true, true) end
   nudge.dragging = false
   pushRouteState()
 end
@@ -6193,7 +6202,12 @@ function M.nudgeTurn(dir)
   if not (nudge.on and nudge.sel and nudge.list) then return end
   local wp = nudge.list[nudge.sel]
   if not wp then return end
-  nudge.turn(wp, (tonumber(dir) or 1) >= 0 and nudge.TURN_PER_STEP or -nudge.TURN_PER_STEP)
+  local angle = (tonumber(dir) or 1) >= 0 and nudge.TURN_PER_STEP or -nudge.TURN_PER_STEP
+  if edit.target == 'start' then
+    branch.turnGroup(nudge.sel, angle)
+  else
+    nudge.turn(wp, angle)
+  end
   if edit.target == 'branch' then branch.rebuild() end
   -- One discrete change: send it now.
   if DERBY_TARGETS[edit.target] then
@@ -6213,7 +6227,9 @@ function M.nudgeLift(dir)
   if not wp then return end
   -- A prop rests ON the ground; a gate clears it.
   local clear = (edit.target == 'prop') and 0 or TUNE.GROUND_CLEAR
-  if (tonumber(dir) or 1) >= 0 then
+  if edit.target == 'start' then
+    branch.liftGroup(nudge.sel, (tonumber(dir) or 1) >= 0, TUNE.NUDGE_LIFT_PER_PRESS)
+  elseif (tonumber(dir) or 1) >= 0 then
     wp.z = liftAboveGround(wp.x, wp.y, wp.z + TUNE.NUDGE_LIFT_PER_PRESS, clear)
   else
     wp.z = lowerToGround(wp.x, wp.y, wp.z, TUNE.NUDGE_LIFT_PER_PRESS, clear)
@@ -6239,7 +6255,7 @@ function M.nudgeDelete()
     return
   end
   if edit.target == 'start' then
-    M.removeStartPosition(i)
+    branch.removeGroup(i)
   else
     M.removeCheckpoint(i)
   end
@@ -6287,8 +6303,11 @@ function nudge.update()
     up   = im.IsMouseReleased(0)
   end)
 
-  local ctrl = false
-  pcall(function () ctrl = im.GetIO().KeyCtrl == true end)
+  local ctrl, shift = false, false
+  pcall(function ()
+    local io_ = im.GetIO()
+    ctrl, shift = io_.KeyCtrl == true, io_.KeyShift == true
+  end)
 
   -- Ctrl+click PLACES, checked first so one click never places and then drags.
   if down and ctrl and not wantsUi then
@@ -6300,7 +6319,20 @@ function nudge.update()
   -- as a world click too, and clearing on a miss greyed out the buttons.
   if down and not wantsUi and nudge.uiGrace <= 0 then
     local picked = nudge.pick(list, ray)
-    if picked and picked ~= nudge.sel then
+    local grid = edit.target == 'start'
+    if grid and shift and picked then
+      -- Shift+click adds a grid slot to the group or takes it out. No drag.
+      branch.pick(picked, nil)
+      if branch.gridTool.picked[list[picked]] then nudge.sel = picked end
+      branch.syncSel()
+      picked = nil
+      pushRouteState()
+    elseif grid and picked then
+      -- A slot outside the group starts a new one; inside, the group is held.
+      if not branch.gridTool.picked[list[picked]] then branch.pick(picked, true, true) end
+      nudge.sel = picked
+      pushRouteState()
+    elseif picked and picked ~= nudge.sel then
       nudge.sel = picked
       pushRouteState()
     end
@@ -6310,7 +6342,11 @@ function nudge.update()
     -- behind, which teleported gates under the map; a click is several frames).
     local wpSel = picked and list[picked]
     if wpSel then
+      -- The drag plane stays at the grab height: a slot reseated on the ground
+      -- mid-drag would otherwise move the plane, and the plane the slot.
+      nudge.grabZ = wpSel.z
       nudge.grabX, nudge.grabY = nudge.planeAt(ray, wpSel.z)
+      nudge.lifts = grid and branch.groupLifts(branch.groupOf(picked)) or nil
     else
       nudge.grabX, nudge.grabY = nil, nil
     end
@@ -6318,6 +6354,7 @@ function nudge.update()
   if up then
     nudge.dragging = false
     nudge.grabX, nudge.grabY = nil, nil
+    nudge.lifts = nil
     -- A drag ending is when the arena's owner is told.
     nudge.flush()
   end
@@ -6333,9 +6370,10 @@ function nudge.update()
   end
 
   -- No early returns: the scroll handling shares this frame. A drag is purely
-  -- horizontal on the gate's own plane; the floor can only lift it out of a hill.
+  -- horizontal on the plane at the grab height; the floor can only lift a gate
+  -- out of a hill, and a grid slot keeps its height over the ground.
   if nudge.dragging and held and nudge.grabX then
-    local cx, cy = nudge.planeAt(ray, wp.z)
+    local cx, cy = nudge.planeAt(ray, nudge.grabZ or wp.z)
     if cx then
       local dx, dy = cx - nudge.grabX, cy - nudge.grabY
       local d2 = dx * dx + dy * dy
@@ -6344,11 +6382,14 @@ function nudge.update()
         nudge.grabX, nudge.grabY = cx, cy
       elseif d2 >= TUNE.NUDGE_DRAG_MIN * TUNE.NUDGE_DRAG_MIN then
         nudge.grabX, nudge.grabY = cx, cy
-        wp.x, wp.y = wp.x + dx, wp.y + dy
-        -- Dragged into rising ground: lift only. A prop follows the ground.
-        if edit.target == 'prop' then
+        -- A gate dragged into rising ground lifts only. A prop follows it.
+        if edit.target == 'start' then
+          branch.dragGroup(nudge.sel, dx, dy, nudge.lifts)
+        elseif edit.target == 'prop' then
+          wp.x, wp.y = wp.x + dx, wp.y + dy
           props.seat(wp)
         else
+          wp.x, wp.y = wp.x + dx, wp.y + dy
           wp.z = liftAboveGround(wp.x, wp.y, wp.z, TUNE.GROUND_CLEAR)
         end
         if edit.target == 'branch' then branch.rebuild() end
@@ -6371,15 +6412,18 @@ function nudge.update()
 
   -- Scroll turns the selected gate; SHIFT+SCROLL raises and lowers it, the only
   -- control that moves a gate vertically (the size sliders set its extent, not
-  -- its position, and cannot dig a buried gate out).
-  local wheel, shift = 0, false
-  pcall(function ()
-    local io_ = im.GetIO()
-    wheel = io_.MouseWheel or 0
-    shift = io_.KeyShift == true
-  end)
+  -- its position, and cannot dig a buried gate out). A picked grid group turns
+  -- and lifts as one block.
+  local wheel = 0
+  pcall(function () wheel = im.GetIO().MouseWheel or 0 end)
   if wheel ~= 0 and not wantsUi then
-    if shift then
+    if edit.target == 'start' then
+      if shift then
+        branch.liftGroup(nudge.sel, wheel > 0, math.abs(wheel) * TUNE.NUDGE_LIFT_PER_STEP)
+      else
+        branch.turnGroup(nudge.sel, wheel * nudge.TURN_PER_STEP)
+      end
+    elseif shift then
       -- Floored at ground clearance; see lowerToGround for the two helpers.
       local clear = (edit.target == 'prop') and 0 or TUNE.GROUND_CLEAR
       if wheel > 0 then
@@ -6509,6 +6553,8 @@ function M.editorAdd(place)
   if edit.target == 'marker' then
     place.kind = marker.validKind(marker.kind) or 'right'
   end
+  -- A car on a slope sits tilted; its slot is a level box, floored to fit.
+  if edit.target == 'start' then branch.floorSlot(place) end
   target[#target + 1] = place
   -- A hand-placed slot ends the generator's ownership of the grid.
   if edit.target == 'start' then branch.gridTool.generated = false end
@@ -6629,6 +6675,9 @@ function M.moveStartPosition(index)
     guihooks.trigger('RaceManagerEditorMsg', { msg = 'Get in a vehicle first' })
     return
   end
+  branch.floorSlot(place)
+  local picked = branch.gridTool.picked
+  if picked[track.startPositions[index]] then picked[place] = true end
   track.startPositions[index] = place
   -- Hand-placed now: the grid sliders let go of it.
   branch.gridTool.generated = false
@@ -6760,7 +6809,9 @@ function M.insertCheckpoint(index, place)
   end
   if edit.target == 'prop' then
     place = props.fromPlace(place, driven)
-  elseif edit.target ~= 'start' then
+  elseif edit.target == 'start' then
+    branch.floorSlot(place)
+  else
     local prev = list[index] or list[#list]
     place.width  = clampWidth(prev and prev.width  or track.checkpointWidth)
     place.height = clampHeight(prev and prev.height or track.checkpointHeight)
@@ -6822,7 +6873,90 @@ branch.gridTool = {
   spacing   = 8,       -- meters between rows
   stagger   = 6,       -- meters between the cars ACROSS a row
   width     = 2,       -- cars per row
+  -- The slots picked to move together, keyed by slot TABLE so a remove or a
+  -- reorder keeps pointing at the same slots. Weak: a dropped slot falls out.
+  picked    = setmetatable({}, { __mode = 'k' }),
 }
+
+-- --- Keeping a slot out of the ground ---------------------------------------
+-- A slot is drawn, and a car dropped, as a LEVEL box START_SLOT_LEN by
+-- START_SLOT_WIDE. On a hill or a banking the centre can clear the ground with
+-- one end in it, so every slot height here is taken over the whole footprint.
+
+-- The ground at (x, y) near height `z`: the first surface down from
+-- SLOT_PROBE_UP above it, else groundAt's search.
+function branch.groundNear(x, y, z)
+  if type(castRayStatic) == 'function' then
+    local from = z + TUNE.SLOT_PROBE_UP
+    local reach = TUNE.SLOT_PROBE_UP + TUNE.GROUND_PROBE_DOWN
+    local ok, dist = pcall(castRayStatic, vec3(x, y, from), vec3(0, 0, -1), reach)
+    if ok and type(dist) == 'number' and dist < reach then return from - dist end
+  end
+  return groundAt(x, y, z)
+end
+
+-- The ground at (x1, y1), walked to from (x0, y0) where it is g0, a step at a
+-- time: one probe from far away starts under a climb and misses it. g0 when
+-- nothing is found.
+function branch.groundToward(x0, y0, g0, x1, y1)
+  local dx, dy = x1 - x0, y1 - y0
+  local n = math.ceil(math.sqrt(dx * dx + dy * dy) / TUNE.SLOT_PROBE_STEP)
+  if n < 1 then n = 1 end
+  local g = g0
+  for s = 1, n do
+    g = branch.groundNear(x0 + dx * s / n, y0 + dy * s / n, g) or g
+  end
+  return g
+end
+
+-- The highest ground under a slot's footprint (centre and corners) probed near
+-- `z`, and the ground at its centre. nil, nil with no ground found.
+function branch.footGround(sp, z)
+  local fx, fy = sp.hx or 0, sp.hy or 1
+  local rx, ry = fy, -fx
+  local hl, hw = TUNE.START_SLOT_LEN * 0.5, TUNE.START_SLOT_WIDE * 0.5
+  local mid = branch.groundNear(sp.x, sp.y, z)
+  local top = mid
+  for sf = -1, 1, 2 do
+    for sr = -1, 1, 2 do
+      local g = branch.groundNear(sp.x + fx * sf * hl + rx * sr * hw,
+                                  sp.y + fy * sf * hl + ry * sr * hw, z)
+      if g and (not top or g > top) then top = g end
+    end
+  end
+  return top, mid
+end
+
+-- How far a slot stands over the highest ground under it, never less than
+-- GROUND_CLEAR: a buried slot comes out on its next move.
+function branch.slotLift(sp)
+  local top = branch.footGround(sp, sp.z)
+  if not top then return TUNE.GROUND_CLEAR end
+  return math.max(sp.z - top, TUNE.GROUND_CLEAR)
+end
+
+-- Stand a slot `lift` over the highest ground under it, probed near `z` (its
+-- own height by default). Left where it is when no ground is found.
+function branch.seatSlot(sp, lift, z)
+  local top = branch.footGround(sp, z or sp.z)
+  if top then sp.z = top + math.max(lift or 0, TUNE.GROUND_CLEAR) end
+end
+
+-- Raise a slot until its whole footprint clears the ground. Never lowers it.
+function branch.floorSlot(sp)
+  local top = branch.footGround(sp, sp.z)
+  if top and sp.z < top + TUNE.GROUND_CLEAR then sp.z = top + TUNE.GROUND_CLEAR end
+end
+
+-- Lower a slot by `step`, stopping at the footprint's ground. No ground seen,
+-- no drop (as lowerToGround).
+function branch.lowerSlot(sp, step)
+  local top = branch.footGround(sp, sp.z)
+  if not top then return end
+  local want = sp.z - math.abs(step)
+  local floor = top + TUNE.GROUND_CLEAR
+  sp.z = (want < floor) and floor or want
+end
 
 -- Lay N slots back down an anchor's heading, `width` abreast, each row CENTERED
 -- on the anchor (so changing the width does not walk the grid sideways).
@@ -6835,11 +6969,15 @@ function branch.layOutGrid(anchor, count, spacing, stagger, width, replace)
   if width > TUNE.GRID_MAX_WIDTH then width = TUNE.GRID_MAX_WIDTH end
   if replace then track.startPositions = {} end
   local mid = (width - 1) * 0.5
-  -- Every slot finds its own ground, keeping the anchor's height ABOVE the
-  -- ground (a flat plane through a hill buries rows; a bridge grid stays up).
-  local anchorGround = groundAt(anchor.x, anchor.y, anchor.z)
-  local lift = anchorGround and (anchor.z - anchorGround) or TUNE.GROUND_CLEAR
+  -- Every slot keeps the anchor's height ABOVE the ground under its footprint
+  -- (a flat plane through a hill buries rows; a bridge grid stays up).
+  local top, under = branch.footGround(anchor, anchor.z)
+  local lift = top and (anchor.z - top) or TUNE.GROUND_CLEAR
   if lift < TUNE.GROUND_CLEAR then lift = TUNE.GROUND_CLEAR end
+  -- Walked to from the slot a row ahead in the same column, so a climb or a
+  -- banking away from the anchor is followed rather than probed from below.
+  local ahead = {}
+  local base = { x = anchor.x, y = anchor.y, g = under or (anchor.z - lift) }
   for i = 0, count - 1 do
     local row  = math.floor(i / width)
     local col  = i % width
@@ -6847,14 +6985,12 @@ function branch.layOutGrid(anchor, count, spacing, stagger, width, replace)
     local side = (col - mid) * stagger
     local x = anchor.x - fx * back + rx * side
     local y = anchor.y - fy * back + ry * side
-    -- Probed from the anchor's height: the slot has none yet.
-    local g = groundAt(x, y, anchor.z)
-    track.startPositions[#track.startPositions + 1] = {
-      x  = x,
-      y  = y,
-      z  = g and (g + lift) or anchor.z,
-      hx = fx, hy = fy,
-    }
+    local from = ahead[col] or base
+    local g = branch.groundToward(from.x, from.y, from.g, x, y)
+    local sp = { x = x, y = y, z = g + lift, hx = fx, hy = fy }
+    branch.seatSlot(sp, lift)
+    ahead[col] = { x = x, y = y, g = g }
+    track.startPositions[#track.startPositions + 1] = sp
   end
 end
 
@@ -6923,17 +7059,26 @@ function M.respaceGrid(spacing, stagger, width)
   if keep < 0 then keep = 0 end
   -- Headings survive the move: on a head-on grid the way a car faces is the
   -- only thing saying which direction it races.
+  -- So do picks: the slots are new tables after this.
+  local picked = branch.gridTool.picked
   local held = {}
   for i = keep + 1, #track.startPositions do
     local sp = track.startPositions[i]
-    held[i - keep] = sp and { hx = sp.hx, hy = sp.hy } or nil
+    held[i - keep] = sp and { hx = sp.hx, hy = sp.hy, picked = picked[sp] } or nil
   end
   for i = #track.startPositions, keep + 1, -1 do table.remove(track.startPositions, i) end
   branch.layOutGrid(branch.gridTool.anchor, branch.gridTool.count,
     spacing, stagger, width, false)
   for i = 1, branch.gridTool.count do
     local sp, was = track.startPositions[keep + i], held[i]
-    if sp and was and was.hx and was.hy then sp.hx, sp.hy = was.hx, was.hy end
+    if sp and was and was.hx and was.hy then
+      -- Laid out square to the anchor: a slot turned off that axis has a
+      -- different footprint, so it is floored again on its own.
+      local skew = math.abs(was.hx * sp.hy - was.hy * sp.hx) > 1e-3
+      sp.hx, sp.hy = was.hx, was.hy
+      if skew then branch.floorSlot(sp) end
+    end
+    if sp and was and was.picked then picked[sp] = true end
   end
   -- Headings follow the slot, not the row, when the width re-flows them.
   branch.gridTool.spacing = spacing
@@ -6958,6 +7103,181 @@ function M.flipStartPositions(from, to)
   end
   pushRouteState()
   guihooks.trigger('RaceManagerEditorMsg', { msg = 'Turned ' .. n .. ' start position(s) around' })
+end
+
+-- --- Moving several slots at once -------------------------------------------
+-- Picked from the panel's ticks or shift+click in Place mode. Every edit Place
+-- mode makes to a picked slot is made to all of them, as one rigid block.
+
+-- The picked slots in grid order, as { i, sp }.
+function branch.pickedSlots()
+  local picked, out = branch.gridTool.picked, {}
+  for i, sp in ipairs(track.startPositions) do
+    if picked[sp] then out[#out + 1] = { i = i, sp = sp } end
+  end
+  return out
+end
+
+-- The same as slot numbers, for the panel.
+function branch.pickedIndices()
+  local out = {}
+  for _, m in ipairs(branch.pickedSlots()) do out[#out + 1] = m.i end
+  return out
+end
+
+-- What an edit to slot `i` moves: the picked group when `i` is in it, else `i`.
+function branch.groupOf(i)
+  local sp = track.startPositions[i]
+  if not sp then return {} end
+  if branch.gridTool.picked[sp] then return branch.pickedSlots() end
+  return { { i = i, sp = sp } }
+end
+
+-- Each member's height over its ground, taken BEFORE a move.
+function branch.groupLifts(members)
+  local lifts = {}
+  for _, m in ipairs(members) do lifts[m.sp] = branch.slotLift(m.sp) end
+  return lifts
+end
+
+-- Place mode's handle stays on a picked slot: the one it was on, else the first.
+function branch.syncSel()
+  if not (nudge.on and edit.target == 'start') then return end
+  local cur = nudge.sel and track.startPositions[nudge.sel]
+  if cur and branch.gridTool.picked[cur] then return end
+  local first = branch.pickedSlots()[1]
+  nudge.sel = first and first.i or nil
+  nudge.dragging = false
+end
+
+-- `on` true/false sets slot `i`, nil toggles it. `only` drops every other pick.
+function branch.pick(i, on, only)
+  local sp = track.startPositions[i]
+  if not sp then return end
+  local picked = branch.gridTool.picked
+  if only then
+    for k in pairs(picked) do picked[k] = nil end
+  end
+  if on == nil then on = not picked[sp] end
+  picked[sp] = on or nil
+end
+
+-- Slide the group BY (dx, dy), each slot keeping its height over the ground
+-- under it, so a block dragged over a crest neither buries nor floats.
+function branch.dragGroup(i, dx, dy, lifts)
+  for _, m in ipairs(branch.groupOf(i)) do
+    local sp = m.sp
+    local lift = lifts and lifts[sp] or branch.slotLift(sp)
+    sp.x, sp.y = sp.x + dx, sp.y + dy
+    branch.seatSlot(sp, lift)
+  end
+end
+
+-- Turn the group about its centre, positions and headings together. One slot
+-- turns in place; its footprint still moves, so it is reseated too.
+function branch.turnGroup(i, radians)
+  local members = branch.groupOf(i)
+  if #members == 0 then return end
+  local lifts = branch.groupLifts(members)
+  local cx, cy = 0, 0
+  for _, m in ipairs(members) do cx, cy = cx + m.sp.x, cy + m.sp.y end
+  cx, cy = cx / #members, cy / #members
+  local c, s = math.cos(radians), math.sin(radians)
+  for _, m in ipairs(members) do
+    local sp = m.sp
+    local ox, oy = sp.x - cx, sp.y - cy
+    sp.x, sp.y = cx + ox * c - oy * s, cy + ox * s + oy * c
+    nudge.turn(sp, radians)
+    branch.seatSlot(sp, lifts[sp])
+  end
+  if #members > 1 then branch.gridTool.generated = false end
+end
+
+-- Raise the group, or lower it with each slot stopping at its own ground.
+function branch.liftGroup(i, up, step)
+  for _, m in ipairs(branch.groupOf(i)) do
+    if up then
+      m.sp.z = m.sp.z + math.abs(step)
+      branch.floorSlot(m.sp)
+    else
+      branch.lowerSlot(m.sp, step)
+    end
+    -- Mid-drag, the drag would put the old height back on its next frame.
+    if nudge.lifts then nudge.lifts[m.sp] = branch.slotLift(m.sp) end
+  end
+end
+
+-- Delete the group, last first so the indices still name the right slots.
+function branch.removeGroup(i)
+  local members = branch.groupOf(i)
+  for k = #members, 1, -1 do M.removeStartPosition(members[k].i) end
+end
+
+-- The panel's tick on slot `index`: `on` true/false, or nil to toggle.
+function M.pickStartPosition(index, on)
+  -- A panel press is a world click too (see nudgeTurn).
+  nudge.uiGrace = TUNE.NUDGE_UI_GRACE
+  index = math.floor(tonumber(index) or 0)
+  if on ~= nil then on = (on == true or on == 'true') end
+  branch.pick(index, on)
+  local sp = track.startPositions[index]
+  -- A tick in Place mode hands the mouse that slot.
+  if sp and branch.gridTool.picked[sp] and nudge.on and edit.target == 'start' then
+    nudge.sel, nudge.dragging = index, false
+  end
+  branch.syncSel()
+  pushRouteState()
+end
+
+-- Pick every slot, or none.
+function M.pickAllStartPositions(on)
+  nudge.uiGrace = TUNE.NUDGE_UI_GRACE
+  on = (on == true or on == 'true')
+  local picked = branch.gridTool.picked
+  for k in pairs(picked) do picked[k] = nil end
+  if on then
+    for _, sp in ipairs(track.startPositions) do picked[sp] = true end
+  end
+  branch.syncSel()
+  pushRouteState()
+end
+
+-- Move the picked slots as one block so the first of them lands where the car
+-- is, turned to face the way it faces. Each keeps its height over the ground.
+function M.movePickedStartPositions()
+  nudge.uiGrace = TUNE.NUDGE_UI_GRACE
+  local members = branch.pickedSlots()
+  if #members == 0 then
+    guihooks.trigger('RaceManagerEditorMsg', { msg = 'Pick the slots to move first' })
+    return
+  end
+  local place = vehiclePlacement()
+  if not place then
+    guihooks.trigger('RaceManagerEditorMsg', { msg = 'Get in a vehicle first' })
+    return
+  end
+  local lead = members[1].sp
+  local turn = math.atan2(place.hy, place.hx) - math.atan2(lead.hy or 1, lead.hx or 0)
+  local c, s = math.cos(turn), math.sin(turn)
+  local lifts = branch.groupLifts(members)
+  local lx, ly = lead.x, lead.y
+  -- Every slot's ground is walked to from the car's, not probed from wherever
+  -- the block used to be: that can be a hill away.
+  local ground = groundAt(place.x, place.y, place.z) or (place.z - TUNE.GROUND_CLEAR)
+  for _, m in ipairs(members) do
+    local sp = m.sp
+    local ox, oy = sp.x - lx, sp.y - ly
+    sp.x, sp.y = place.x + ox * c - oy * s, place.y + ox * s + oy * c
+    nudge.turn(sp, turn)
+    local g = branch.groundToward(place.x, place.y, ground, sp.x, sp.y)
+    sp.z = g + lifts[sp]
+    branch.seatSlot(sp, lifts[sp])
+  end
+  branch.gridTool.generated = false
+  pushRouteState()
+  guihooks.trigger('RaceManagerEditorMsg', {
+    msg = 'Moved ' .. #members .. ' start position(s) to your car' })
+  log('I', 'raceManager', 'Moved ' .. #members .. ' picked start positions to the current vehicle')
 end
 
 -- No slot carries a direction: the slot points the car, and Flip splits a
