@@ -234,6 +234,13 @@ course you want to race:
    that can change that is being dragged into rising ground, which lifts it
    clear rather than burying it.
 
+   A **grid slot** is the exception: it is where a car is dropped, so a dragged
+   slot keeps its height over the ground under it, down a hill as well as up
+   one. On the **Grid** tab, **shift+click** picks more than one slot, and a
+   drag, a scroll or **▲ Up** / **▼ Down** on any picked slot does the same to
+   all of them as one block; scrolling turns the block about its centre.
+   **Delete picked** removes every picked slot.
+
    **Shift+scroll raises and lowers** the selected gate, and **▲ Up** / **▼ Down**
    do the same in bigger steps for a mouse with no wheel. This is the only control
    that moves a gate vertically: the **Gate size** sliders set how far it extends
@@ -2154,6 +2161,21 @@ them and the grid moves under you - no driving back to pole to try a different
 shape. They only ever touch slots the generator laid out; anything placed by hand
 is left where you put it, and moving or deleting a slot by hand hands the block
 back so the sliders stop claiming it.
+
+**No slot goes under the map.** A slot is a level box one car long, so on a hill
+or a banking its centre can clear the ground with one end buried. Every slot the
+editor places, generates, respaces, drags, turns or lowers clears the ground
+under its **whole footprint**, centre and corners, and the generator walks the
+ground out from pole a few meters at a time, so a road that climbs or banks away
+from pole is followed. On a slope that leaves a slot a little higher than a car
+sits; the car drops onto the road and settles before the hold starts. A slot
+saved by an earlier version is fixed the next time it is moved or generated.
+
+**Moving several slots at once.** Tick slots in the list (or press **All**), or
+**shift+click** them in Place mode; picked slots draw magenta. In Place mode a
+drag, turn or raise on any picked slot moves them all as one block. **Move
+Picked Here** does it from the driver's seat: the first picked slot lands where
+your car is, facing the way it faces, and the rest keep their places around it.
 
 **↻ Turn Around** turns a range of slots through 180°, and on a head-on layout it
 is the entire split: the way a slot points is the only thing deciding which

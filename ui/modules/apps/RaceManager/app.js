@@ -187,6 +187,7 @@ angular.module('beamng.apps')
       $scope.gridMode = 'quali';      // quali | reverse | random | custom
       $scope.startSlots = 0;          // start positions the loaded track has
       $scope.startPositions = [];     // placed on this client
+      $scope.gridPicked = [];         // slot numbers picked to move together
       $scope.gridSlot = null;         // the slot this client was given
       $scope.gridFrozen = false;      // held on the grid for the countdown
       // Custom grid entry boxes, keyed by driver id. Bound through an object
@@ -2306,6 +2307,7 @@ var rectSeen = { width: null, length: null, rot: null, wall: null, wallDepth: nu
           if (typeof data.depth === 'number') { $scope.settingsUi.depth = data.depth; }
           // Starting grid placed/loaded on this client.
           $scope.startPositions = toArray(data.startPositions);
+          $scope.gridPicked = toArray(data.gridPicked);
           $scope.gridSlot = data.gridSlot || null;
           $scope.gridFrozen = !!data.gridFrozen;
           // Race entry state as this client knows it.
@@ -4711,6 +4713,20 @@ var rectSeen = { width: null, length: null, rot: null, wall: null, wallDepth: nu
       };
       $scope.previewStartPosition = function (index) {
         bngApi.engineLua('raceManager.previewStartPosition(' + index + ')');
+      };
+      // Picks live in the client Lua (shift+click in Place mode sets them too);
+      // the panel only asks and shows what the route broadcast says.
+      $scope.slotPicked = function (index) {
+        return $scope.gridPicked.indexOf(index) !== -1;
+      };
+      $scope.toggleSlotPick = function (index) {
+        bngApi.engineLua('raceManager.pickStartPosition(' + index + ')');
+      };
+      $scope.pickAllSlots = function (on) {
+        bngApi.engineLua('raceManager.pickAllStartPositions(' + (on ? 'true' : 'false') + ')');
+      };
+      $scope.movePickedHere = function () {
+        bngApi.engineLua('raceManager.movePickedStartPositions()');
       };
 
       // ------------------------------------------------------------------

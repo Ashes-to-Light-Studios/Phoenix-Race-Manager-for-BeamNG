@@ -2221,6 +2221,9 @@
       if your mouse has no wheel. <b>Ctrl+click</b> open ground to place a new
       one, which lands after the picked gate if there is one. Works on whichever
       tab you are editing.</div>
+      <div ng-if="editorTarget === 'start'"><b>Shift+click</b> more slots to pick
+      them too. Dragging, turning or raising any picked slot moves them all as one
+      block, and each keeps its height over the ground under it.</div>
       <div class="rm-nudge-row">
         <button class="rm-btn rm-btn-mini" ng-click="nudgeTurn(-1)"
                 ng-disabled="!nudgeSel" title="Turn the picked gate anticlockwise">↺</button>
@@ -2233,10 +2236,11 @@
                 ng-disabled="!nudgeSel"
                 title="Lower the picked gate. It stops at ground level rather than burying it.">▼ Down</button>
         <button class="rm-btn rm-btn-end rm-btn-mini" ng-click="nudgeDelete()"
-                ng-disabled="!nudgeSel" title="Delete the picked gate">
+                ng-disabled="!nudgeSel" title="Delete the picked gate, or every picked slot">
           ✕ Delete picked
         </button>
-        <span class="rm-nudge-sel">{{ nudgeSel ? 'picked #' + nudgeSel : 'nothing picked' }}</span>
+        <span class="rm-nudge-sel">{{ !nudgeSel ? 'nothing picked'
+          : (editorTarget === 'start' && gridPicked.length > 1 ? gridPicked.length + ' slots picked' : 'picked #' + nudgeSel) }}</span>
       </div>
       <div>Turning this off leaves the cursor free, so use your own camera key to
       give the mouse back to the view.</div>
@@ -2354,6 +2358,20 @@
         <input type="number" class="rm-lane-num" min="1" ng-model="laneRange.to">
         <button class="rm-btn rm-btn-mini rm-btn-grid" ng-click="flipStartPositions()"
                 title="Turn these slots 180°. Build one block, flip half of it, and that is a head-on grid.">↻ Turn Around</button>
+      </div>
+      <!-- PICKED SLOTS MOVE AS ONE BLOCK. Ticks in the list below or shift+click
+           in Place mode; a drag, turn, Up/Down or Delete on one picked slot does
+           the same to all of them. -->
+      <div class="rm-lanes-row" ng-if="startPositions.length">
+        <label class="rm-lane-label">Picked</label>
+        <span class="rm-setting-val">{{ gridPicked.length }} of {{ startPositions.length }}</span>
+        <button class="rm-btn rm-btn-mini" ng-click="pickAllSlots(true)"
+                ng-disabled="gridPicked.length === startPositions.length">All</button>
+        <button class="rm-btn rm-btn-mini" ng-click="pickAllSlots(false)"
+                ng-disabled="!gridPicked.length">None</button>
+        <button class="rm-btn rm-btn-mini rm-btn-grid" ng-click="movePickedHere()"
+                ng-disabled="!gridPicked.length"
+                title="Move the picked slots as one block: the first lands where your car is, facing your way, and the rest keep their places around it.">Move Picked Here</button>
       </div>
       <!-- WHERE THE OUT LAP STARTS. A grid part way round meets some checkpoint
            before the line; arming CP 1 left that whole run with nothing lit.
@@ -2554,7 +2572,11 @@
 
     <!-- Starting grid list: every placed slot stays editable -->
     <div class="rm-editor-list" ng-if="editingGrid() && startPositions.length">
-      <div class="rm-editor-wp rm-start-row" ng-repeat="sp in startPositions track by $index">
+      <div class="rm-editor-wp rm-start-row" ng-repeat="sp in startPositions track by $index"
+           ng-class="{'rm-start-picked': slotPicked($index + 1)}">
+        <button class="rm-btn rm-btn-mini rm-pick" ng-class="{'rm-pick-on': slotPicked($index + 1)}"
+                ng-click="toggleSlotPick($index + 1)"
+                title="Pick this slot to move it together with the others you pick">{{ slotPicked($index + 1) ? '✓' : '' }}</button>
         <span class="rm-editor-idx rm-start-idx">P{{ $index + 1 }}</span>
         <span class="rm-editor-coords">{{ sp.x.toFixed(1) }}, {{ sp.y.toFixed(1) }}, {{ sp.z.toFixed(1) }}</span>
         <button class="rm-btn rm-btn-mini" ng-click="previewStartPosition($index + 1)"
@@ -5608,6 +5630,14 @@
   /* Starting grid editor rows */
   .rm-start-row { gap: 6px; cursor: default; }
   .rm-start-idx { color: #8ab4f8; }
+  /* A picked slot: Place mode's magenta, the color it is drawn in the world. */
+  .rm-pick { width: 20px; min-height: 17px; padding: 1px 0; text-align: center; }
+  .rm-pick-on {
+    background: rgba(255, 51, 230, 0.3);
+    border-color: rgba(255, 51, 230, 0.85);
+    color: #ffd9f7;
+  }
+  .rm-start-picked { background: rgba(255, 51, 230, 0.08); }
   .rm-grid-pin {
     width: 38px;
     background: rgba(255, 255, 255, 0.08);

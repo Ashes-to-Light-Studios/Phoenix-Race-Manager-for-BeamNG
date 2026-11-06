@@ -6,6 +6,30 @@ tag, the packaged zip, and the build stamp the app shows - see the note in
 
 [← Back to the README](README.md)
 
+## Unreleased - Move grid slots together, none under the map
+
+#### Added
+
+- **Pick several start positions and move them as one.** In the editor's
+  **Grid** tab, tick slots in the list (**All** and **None** are there too), or
+  **shift+click** them in Place mode. A drag, a scroll or **▲ Up** / **▼ Down**
+  on any picked slot then moves all of them as one block, and scrolling turns
+  the block about its centre. **Move Picked Here** moves the block from the
+  driver's seat: the first picked slot lands on your car, facing your way.
+  **Delete picked** removes them all. Picked slots draw magenta.
+
+#### Fixed
+
+- **Generated start positions went under the map where the ground tilts.** A
+  slot is a level box one car long, and it was only lifted clear of the ground
+  at its centre, so on a hill or a banking one end sat in the terrain, and the
+  spacing sliders made it worse as they spread the grid onto steeper ground. A
+  road climbing away from pole could also be missed altogether. Every slot now
+  clears the ground under its whole footprint whenever it is placed, generated,
+  respaced, dragged, turned or lowered, and the generator follows the road out
+  from pole a few meters at a time. A dragged slot now follows the ground down
+  a hill too, rather than being left in the air.
+
 ## 0.20.4 - Start the out lap part way round
 
 #### Added

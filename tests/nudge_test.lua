@@ -821,18 +821,35 @@ check(#slots == 6, 'six slots are generated (got ' .. #slots .. ')')
 -- Row 0 is at the anchor, row 1 ten meters back, row 2 twenty. The ground there
 -- is -1 and -2 meters, so a grid that ignored terrain would leave those rows one
 -- and two meters in the air -- or buried, on ground that rises.
+--
+-- Measured over the FOOTPRINT. A slot is a level box 4.6 m long; on this slope
+-- its front end is 0.23 m higher than its centre, and a slot half a meter over
+-- its centre had that end in the hill. Reported as "the start positions go
+-- under the map when the terrain changes angles".
+local HL, HW = 2.3, 1.1   -- TUNE.START_SLOT_LEN / 2, TUNE.START_SLOT_WIDE / 2
+local function footClear(sp)
+  local fx, fy = sp.hx or 0, sp.hy or 1
+  local rx, ry = fy, -fx
+  local least, centre = math.huge, sp.z - terrainAt(sp.x, sp.y)
+  for _, c in ipairs({ { 0, 0 }, { 1, 1 }, { 1, -1 }, { -1, 1 }, { -1, -1 } }) do
+    local x = sp.x + fx * c[1] * HL + rx * c[2] * HW
+    local y = sp.y + fy * c[1] * HL + ry * c[2] * HW
+    least = math.min(least, sp.z - terrainAt(x, y))
+  end
+  return least, centre
+end
 local ok = true
 for i, sp in ipairs(slots) do
-  local g = terrainAt(sp.x, sp.y)
-  local clear = sp.z - g
-  if clear < 0.4 or clear > 0.7 then
+  local least, centre = footClear(sp)
+  if least < 0.49 or centre > 0.5 + 0.23 + 0.01 then
     ok = false
-    print(string.format('    slot %d: z=%.2f ground=%.2f clearance=%.2f',
-      i, sp.z, g, clear))
+    print(string.format('    slot %d: z=%.2f least clearance=%.2f centre=%.2f',
+      i, sp.z, least, centre))
   end
 end
-check(ok, 'every slot sits the same half meter above the ground UNDER IT, '
-  .. 'rather than all sharing the anchor height')
+check(ok, 'every slot clears the ground under its WHOLE footprint by half a '
+  .. 'meter, and floats no higher than the slope makes it, rather than all '
+  .. 'sharing the anchor height')
 
 -- The anchor's height above ground is what is preserved, not its absolute z. A
 -- grid generated from a car up on a bridge stays on the bridge.
@@ -846,6 +863,243 @@ check(#slots == 3, 'three slots on the flyover')
 check(slots[3] ~= nil and slots[3].z > 15,
   'a grid generated up on a bridge is not dropped to the ground below it (z='
     .. tostring(slots[3] and slots[3].z) .. ')')
+
+-- Every slot of the grid on screen, the worst one printed.
+local function allClear(surfaceAt, label)
+  local was = terrainAt
+  if surfaceAt then terrainAt = surfaceAt end
+  local good, list = true, (routeState or {}).startPositions or {}
+  for i, sp in ipairs(list) do
+    local least = footClear(sp)
+    if least < 0.49 then
+      good = false
+      print(string.format('    %s slot %d: z=%.2f least clearance=%.2f', label, i, sp.z, least))
+    end
+  end
+  terrainAt = was
+  return good and #list > 0
+end
+
+-- A ROAD THAT BANKS across the grid: each slot's high side is above its centre.
+RM.editorClear()
+terrainAt = function (x, y) return x * 0.3 end
+veh.x, veh.y, veh.z = 0, 0, 0.5
+RM.generateStartPositions(8, 10, 6, 0, 2)
+frame()
+check(allClear(nil, 'banked'), 'on a banking every corner of every slot clears the ground')
+
+-- A ROAD THAT CLIMBS AWAY FROM POLE, on a deck 0.4 m over the terrain (a mesh
+-- road). Probing from the anchor's height starts under the climb; the search
+-- upward then met the terrain under the deck before the deck, and the slot went
+-- under the road.
+ceilingAt = function (x, y) return -y * 0.25 end
+terrainAt = function (x, y) return -y * 0.25 - 0.4 end
+RM.editorClear()
+veh.x, veh.y, veh.z = 0, 0, 0.5
+RM.generateStartPositions(6, 11.4, 4, 0, 2)
+frame()
+check(allClear(ceilingAt, 'deck'),
+  'on a climbing deck every slot clears the DECK, not the terrain under it')
+ceilingAt = function (x, y) return nil end
+
+-- THE SLIDERS re-lay the grid onto whatever the ground does there.
+terrainAt = function (x, y) return x * 0.3 - y * 0.15 end
+RM.editorClear()
+veh.x, veh.y, veh.z = 0, 0, 0.5
+RM.generateStartPositions(8, 8, 6, 0, 2)
+for _, s in ipairs({ { 14, 9, 4 }, { 22, 3, 1 }, { 5, 12, 3 } }) do
+  RM.respaceGrid(s[1], s[2], s[3])
+  frame()
+  check(allClear(nil, 'respaced'), string.format(
+    'respaced to %dm rows, %dm across, %d abreast: every slot still clears the ground',
+    s[1], s[2], s[3]))
+end
+
+-- A SLOT TURNED ON A BANKING swings its long side across the slope.
+RM.editorClear()
+terrainAt = function (x, y) return x * 0.3 end
+veh.x, veh.y, veh.z = 0, 0, 0.5
+RM.editorAdd()
+RM.setNudgeMode(true)
+for _ = 1, 5 do frame() end
+clickAt(0, 0)
+letGo()
+for _ = 1, 18 do mouse.wheel = 1; frame() end   -- a quarter turn
+mouse.wheel = 0
+check(allClear(nil, 'turned'), 'a slot turned across a banking is lifted clear of it')
+
+-- DOWN stops at the ground under the whole footprint, not under the centre.
+terrainAt = function (x, y) return y * 0.3 end
+for _ = 1, 6 do RM.nudgeLift(-1) end
+check(allClear(nil, 'lowered'), 'Down stops a slot with its uphill end still clear')
+RM.setNudgeMode(false)
+
+-- ===========================================================================
+-- PICKING SEVERAL GRID SLOTS AND MOVING THEM AS ONE
+-- ===========================================================================
+-- Ticks in the panel or shift+click in Place mode pick slots; whatever Place
+-- mode then does to one picked slot it does to all of them, as one block.
+do
+  local function settle() for _ = 1, 5 do frame() end end
+  local function list() return (routeState or {}).startPositions or {} end
+  local function picks() return table.concat((routeState or {}).gridPicked or {}, ',') end
+  local function shiftClickAt(x, y)
+    aimAt(x, y)
+    mouse.shift = true
+    mouse.clicked, mouse.down, mouse.released = true, true, false
+    frame()
+    mouse.clicked, mouse.shift = false, false
+    letGo()
+  end
+  local function xy(i) local s = list()[i]; return s and s.x, s and s.y end
+  local function near(a, b) return a and b and math.abs(a - b) < 0.01 end
+  local function dist(i, j)
+    local a, b = list()[i], list()[j]
+    return math.sqrt((a.x - b.x) ^ 2 + (a.y - b.y) ^ 2)
+  end
+
+  terrainAt = function (x, y) return 0 end
+  ceilingAt = function (x, y) return nil end
+  RM.setEditorTarget('start')
+  RM.editorClear()
+  -- (-2, 0) (2, 0) / (-2, -10) (2, -10) / (-2, -20) (2, -20), all facing +Y.
+  veh.x, veh.y, veh.z = 0, 0, 0.5
+  RM.generateStartPositions(6, 10, 4, 0, 2)
+  frame()
+  check(#list() == 6, 'six slots to pick from')
+  check(picks() == '', 'nothing is picked to begin with')
+
+  -- THE PANEL'S TICKS
+  RM.pickStartPosition(1)
+  RM.pickStartPosition(3)
+  check(picks() == '1,3', 'ticking P1 and P3 picks both (got ' .. picks() .. ')')
+  RM.pickStartPosition(3)
+  check(picks() == '1', 'ticking P3 again unpicks it')
+  RM.pickAllStartPositions(true)
+  check(picks() == '1,2,3,4,5,6', 'All picks every slot')
+  RM.pickAllStartPositions(false)
+  check(picks() == '', 'None clears them')
+
+  -- PLACE MODE: a click picks one, shift+click adds
+  RM.setNudgeMode(true)
+  settle()
+  clickAt(-2, 0)
+  letGo()
+  check(picks() == '1', 'a click in Place mode picks that slot alone')
+  shiftClickAt(2, 0)
+  shiftClickAt(-2, -10)
+  check(picks() == '1,2,3', 'shift+click adds slots to it (got ' .. picks() .. ')')
+
+  -- A DRAG ON ANY PICKED SLOT MOVES THEM ALL, by the same amount
+  local x4, y4 = xy(4)
+  clickAt(2, 0)
+  dragTo(12, 5)
+  letGo()
+  local x1, y1 = xy(1)
+  local x2, y2 = xy(2)
+  local x3, y3 = xy(3)
+  check(near(x1, 8) and near(y1, 5) and near(x2, 12) and near(y2, 5)
+        and near(x3, 8) and near(y3, -5),
+    'dragging P2 carries P1 and P3 with it, keeping the block\'s shape')
+  local nx4, ny4 = xy(4)
+  check(nx4 == x4 and ny4 == y4, 'and leaves the unpicked slots where they were')
+  check(picks() == '1,2,3', 'and the picks survive the drag')
+  check((routeState or {}).gridGenerated == false,
+    'a moved block is hand-placed now: the sliders let go of it')
+
+  -- SHIFT+CLICK A PICKED SLOT TAKES IT OUT
+  shiftClickAt(8, -5)
+  check(picks() == '1,2', 'shift+click on a picked slot unpicks it')
+
+  -- A PLAIN CLICK OUTSIDE THE GROUP starts a new one
+  clickAt(2, -10)
+  letGo()
+  check(picks() == '4', 'a plain click on an unpicked slot picks it alone')
+
+  -- SCROLL TURNS THE GROUP AS A BLOCK about its centre
+  shiftClickAt(8, 5)
+  shiftClickAt(12, 5)
+  check(picks() == '1,2,4', 'three picked to turn')
+  local d12, d14 = dist(1, 2), dist(1, 4)
+  clickAt(8, 5)
+  letGo()
+  for _ = 1, 18 do mouse.wheel = 1; frame() end   -- a quarter turn
+  mouse.wheel = 0
+  check(math.abs(dist(1, 2) - d12) < 0.01 and math.abs(dist(1, 4) - d14) < 0.01,
+    'turning keeps the gaps between the picked slots')
+  local h = list()[2]
+  check(h and math.abs(h.hx + 1) < 1e-6 and math.abs(h.hy) < 1e-6,
+    'and turns each heading with the block (P2 now faces -X)')
+  check(near(list()[1].x, list()[2].x),
+    'P1 and P2, side by side before, are now one behind the other')
+
+  -- UP AND DOWN MOVE THE WHOLE GROUP
+  local z1, z5 = list()[1].z, list()[5].z
+  RM.nudgeLift(1)
+  check(list()[1].z > z1 + 1 and list()[2].z > z1 + 1, 'Up raises every picked slot')
+  check(list()[5].z == z5, 'and no other')
+  for _ = 1, 4 do RM.nudgeLift(-1) end
+  check(allClear(nil, 'group down'), 'Down stops each of them at its own ground')
+  settle()
+
+  -- DELETE REMOVES THE GROUP
+  RM.nudgeDelete()
+  settle()
+  check(#list() == 3, 'Delete removes all three picked slots (left ' .. #list() .. ')')
+  check(picks() == '', 'and nothing is picked afterwards')
+  RM.setNudgeMode(false)
+
+  -- PICKS FOLLOW THE SLOT through a reorder and the sliders
+  RM.editorClear()
+  veh.x, veh.y, veh.z = 0, 0, 0.5
+  RM.generateStartPositions(6, 10, 4, 0, 2)
+  RM.pickStartPosition(2)
+  RM.pickStartPosition(5)
+  RM.respaceGrid(14, 6, 2)
+  check(picks() == '2,5', 'respacing keeps the picks on the same slots (got ' .. picks() .. ')')
+  RM.reorderCheckpoint(2, 1)
+  check(picks() == '1,5', 'moving a picked slot up the order takes its pick with it')
+
+  -- MOVE PICKED HERE: the block lands with its first slot on the car, turned
+  -- to face the way the car faces.
+  local realDir = veh.getDirectionVector
+  veh.getDirectionVector = function () return { x = 1, y = 0, z = 0 } end
+  local gap = dist(1, 5)
+  local ux, uy = xy(2)
+  veh.x, veh.y, veh.z = 500, 500, 0.5
+  RM.movePickedStartPositions()
+  local lead = list()[1]
+  check(lead and near(lead.x, 500) and near(lead.y, 500),
+    'the first picked slot lands where the car is')
+  check(lead and math.abs(lead.hx - 1) < 1e-6 and math.abs(lead.hy) < 1e-6,
+    'facing the way the car faces')
+  check(math.abs(dist(1, 5) - gap) < 0.01, 'and the rest keep their place in the block')
+  local vx, vy = xy(2)
+  check(vx == ux and vy == uy, 'and an unpicked slot stays where it was')
+  veh.getDirectionVector = realDir
+
+  -- A BLOCK DRAGGED OVER A CREST rides it and comes back down.
+  terrainAt = function (x, y) return math.max(0, 3 - math.abs(y - 530) * 0.3) end
+  RM.pickAllStartPositions(true)
+  RM.setNudgeMode(true)
+  settle()
+  local sx, sy = list()[1].x, list()[1].y
+  clickAt(sx, sy)
+  for k = 1, 30 do dragTo(sx, sy + k) end
+  check(allClear(nil, 'on crest'), 'a block dragged onto a crest keeps every slot out of it')
+  for k = 29, 0, -1 do dragTo(sx, sy + k) end
+  letGo()
+  local floating = false
+  for _, sp in ipairs(list()) do
+    if sp.z - terrainAt(sp.x, sp.y) > 0.75 then floating = true end
+  end
+  check(not floating and allClear(nil, 'off crest'),
+    'and dragged back off it, settles to the ground again rather than floating')
+  RM.setNudgeMode(false)
+  RM.pickAllStartPositions(false)
+  RM.editorClear()
+  terrainAt = function (x, y) return 0 end
+end
 
 -- ===========================================================================
 -- PLACE MODE ON THE ARENA: the same mouse, the derby's lists
