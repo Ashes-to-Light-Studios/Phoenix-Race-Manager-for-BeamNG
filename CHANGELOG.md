@@ -6,7 +6,7 @@ tag, the packaged zip, and the build stamp the app shows - see the note in
 
 [← Back to the README](README.md)
 
-## Unreleased - One-file installers, and updates from the Admin tab
+## 0.22.0 - One-file installers, and updates from the Admin tab
 
 #### Added
 

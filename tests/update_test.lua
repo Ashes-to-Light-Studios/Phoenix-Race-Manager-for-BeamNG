@@ -46,6 +46,7 @@ dofile('server/RaceManager/main.lua')
 local update = require('update')
 local maps = require('maps')
 local CFG = update.host.CFG
+local CURRENT = update.host.RM_BUILD   -- the build under test, not a number written here
 
 local checks, fails = 0, 0
 local function check(cond, msg)
@@ -431,7 +432,7 @@ check(update.job == nil, 'a login just after a look does not ask GitHub again')
 
 local st = stateFor(ADMIN)
 check(st.prmUpdate and st.prmUpdate.available and st.prmUpdate.latest == '9.9.9'
-  and st.prmUpdate.current == '0.21.0' and st.prmUpdate.canUpdate == true,
+  and st.prmUpdate.current == CURRENT and st.prmUpdate.canUpdate == true,
   'an admin is told, and may install it')
 check(st.prmUpdate and st.prmUpdate.notes == 'Added\n- A "quoted" thing', 'with the release notes')
 st = stateFor(MOD)
@@ -519,7 +520,7 @@ update.state = { phase = 'idle' }
 update.job, update.pendingCheck = nil, false
 dropped = {}
 update.warm()
-check(update.last and update.last.ok and update.last.from == '0.21.0' and update.last.to == '9.9.9',
+check(update.last and update.last.ok and update.last.from == CURRENT and update.last.to == '9.9.9',
   'after the restart the update reads as done')
 check((read(PLUGIN .. '/Data/update/last.json') or ''):find('"ok": true', 1, true),
   'and the record is kept, marked read, for the next boot to show')
@@ -541,7 +542,7 @@ local function newRelease(version, z, digest)
 end
 local function reboot()
   freshServer()
-  update.host.RM_BUILD = '0.21.0'
+  update.host.RM_BUILD = CURRENT
   update.state = { phase = 'idle' }
   update.job, update.lastError = nil, nil
   exited, spawned, dropped = 0, {}, {}

@@ -460,13 +460,18 @@ local function serverPort()
   return tonumber(text:match('\n[ \t]*Port[ \t]*=[ \t]*(%d+)')) or 30814
 end
 
--- Picks the method and says, in one sentence, what will happen.
-function M.resolveRestart(info)
+-- Picks the method and says, in one sentence, what will happen. `noWatch` is
+-- the updater's: it changes no config line, so the tool's watch never fires.
+function M.resolveRestart(info, noWatch)
   local want = cfg('mapRestart', 'auto')
   local underTool = type(info.parent) == 'string' and info.parent:lower():find('management') ~= nil
   local grace = cfg('mapRestartGrace', 90)
   local note
   if want == 'auto' then want = underTool and 'watch' or 'relaunch' end
+  if noWatch and want == 'watch' then
+    want = 'relaunch'
+    note = underTool and 'Race Manager restarts the server itself, outside the Management Tool.' or nil
+  end
   if want == 'watch' and underTool and info.mtconfig == 'True' then
     local secs = tonumber(info.mt.checkRestartCfgTimerSeconds) or 0
     if info.mt.checkRestartCfgTimer == 'True' and secs > 0 then
@@ -518,7 +523,7 @@ function M.relaunchScript(info)
     local sys32 = '%SystemRoot%\\System32\\'
     local lines = {
       '@echo off',
-      'rem Written by Race Manager for a map switch. Safe to delete.',
+      'rem Written by Race Manager to restart the server. Safe to delete.',
       'title Race Manager: restarting BeamMP',
       'cd /d "' .. batQuote(cwd) .. '"',
       'set n=0',
@@ -550,7 +555,7 @@ function M.relaunchScript(info)
   local alive = info.pid and ('kill -0 ' .. info.pid .. ' 2>/dev/null || ') or ''
   return table.concat({
     '#!/bin/bash',
-    '# Written by Race Manager for a map switch. Safe to delete.',
+    '# Written by Race Manager to restart the server. Safe to delete.',
     -- Anything inherited from the old server, closed. A socket still open here
     -- keeps its port. bash only: dash reads "exec 12>&-" as a command and exits.
     -- 255 is bash reading this file.
@@ -606,9 +611,13 @@ local function spawnRelauncher(info)
 end
 
 local function stopServer(why)
-  print('[RaceManager] Map switch: stopping the server (' .. why .. ')')
+  print('[RaceManager] Stopping the server (' .. why .. ')')
   M.sys.exit()
 end
+
+-- For update.lua, which restarts the same way.
+function M.spawnRelauncher(info) return spawnRelauncher(info) end
+function M.stopServer(why) return stopServer(why) end
 
 -- ---------------------------------------------------------------------------
 -- State to the panel
@@ -818,10 +827,10 @@ function M.execute()
     value, s.method))
 
   if s.method == 'relaunch' then
-    if spawnRelauncher(s.probe) then return stopServer('relaunch') end
+    if spawnRelauncher(s.probe) then return stopServer('map switch, relaunch') end
     s.method, s.note = 'manual', 'Could not start the relaunch helper. Restart the server by hand.'
   elseif s.method == 'exit' then
-    return stopServer('exit')
+    return stopServer('map switch, exit')
   elseif s.method == 'watch' then
     s.phase, s.left = 'restarting', s.grace
     return
@@ -976,7 +985,7 @@ function M.tick()
     print('[RaceManager] Map switch: nothing restarted the server in ' .. s.grace
       .. ' seconds; restarting it from here')
     if M.sys.exit and spawnRelauncher(s.probe) then
-      return stopServer('relaunch after the wait')
+      return stopServer('map switch, relaunch after the wait')
     end
     s.phase = 'staged'
     timerOff()
