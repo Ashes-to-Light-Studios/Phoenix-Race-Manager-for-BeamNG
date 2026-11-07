@@ -717,7 +717,7 @@ local function statements(call)
   end
   return out
 end
-for _, call in ipairs({ 'cupSetPreset', 'cupSetBonus', 'dragSetConfig',
+for _, call in ipairs({ 'cupSetPreset', 'cupSetBonus', 'dragSetConfig', 'updateStart',
                         'dragSetStaging', 'derbySetConfig' }) do
   local found = statements(call)
   expect(#found > 0, 'found the engineLua call for ' .. call)

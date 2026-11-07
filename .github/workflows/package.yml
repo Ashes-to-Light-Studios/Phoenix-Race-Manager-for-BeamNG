@@ -21,9 +21,17 @@ permissions:
   contents: write
   actions: write
 
+# THREE JOBS, AND THE TAG AND THE RELEASE COME LAST. The zip and the Linux
+# installer are built and tested on Linux, the Windows installer on Windows,
+# and only when every file has passed does `release` tag the commit and
+# publish. A release page missing its installer, or a tag with no release, is
+# what doing it in one pass would leave behind when the Windows half fails.
 jobs:
   package:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.new_tag }}
+      title: ${{ steps.notes.outputs.title }}
     steps:
       - name: Checkout
         # NODE 24. All three actions in this file were on the Node 20 runtime,
@@ -89,14 +97,6 @@ jobs:
           echo "new_tag=$tag" >> "$GITHUB_OUTPUT"
           echo "Releasing $tag from $GITHUB_SHA"
 
-      - name: Create tag
-        run: |
-          tag="${{ steps.version.outputs.new_tag }}"
-          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
-            git tag "$tag" "$GITHUB_SHA"
-            git push origin "$tag"
-          fi
-
       # --- Build the package with the SAME tool the deploy uses ---
       #
       # tools/deploy.py, not a file list written out again here. This step used
@@ -152,9 +152,26 @@ jobs:
           for f in lua/ge/extensions/raceManager.lua                    lua/ge/extensions/raceManager/derby.lua                    lua/ge/extensions/raceManager/drag.lua                    lua/ge/extensions/raceManager/maps.lua                    lua/ge/extensions/raceManager/records.lua                    lua/ge/extensions/raceManager/lights.lua                    lua/ge/extensions/raceManager/radar.lua                    lua/ge/extensions/raceManager/props.lua                    lua/ge/extensions/raceManager/render.lua                    lua/ge/extensions/raceManager/splash.lua                    scripts/raceManager/modScript.lua                    ui/modules/apps/RaceManager/app.html                    ui/modules/apps/RaceManager/app.js                    ui/modules/apps/RaceManager/app.json                    ui/modules/apps/RaceManager/app.png                    ui/modules/apps/RaceManager/splash.png                    ui/modules/apps/RaceManagerLights/app.html                    ui/modules/apps/RaceManagerLights/app.js                    ui/modules/apps/RaceManagerLights/app.json                    ui/modules/apps/RaceManagerLights/app.png                    ui/modules/apps/RaceManagerRadar/app.html                    ui/modules/apps/RaceManagerRadar/app.js                    ui/modules/apps/RaceManagerRadar/app.json                    ui/modules/apps/RaceManagerRadar/app.png; do
             unzip -l package/Client/RaceManager.zip | grep -q " $f$"               || fail "$f is missing from the client zip: the mod will mount and then fail its require"
           done
-          for f in main.lua derby.lua drag.lua maps.lua records.lua; do
+          for f in main.lua derby.lua drag.lua maps.lua records.lua update.lua; do
             test -f "package/Server/RaceManager/$f"               || fail "Server/RaceManager/$f missing (check the folder case)"
           done
+          # THE IN-GAME UPDATER INSTALLS ONLY THESE PATHS and refuses a release
+          # holding any other (update.lua, unpackRelease), so a new kind of file
+          # here would strand every server on the previous version. Teach the
+          # updater first, then widen this.
+          bad=$(unzip -Z1 RaceManager-${{ steps.version.outputs.new_tag }}.zip \
+            | grep -Ev '^([^/]+|Client/|Client/RaceManager\.zip|Server/|Server/RaceManager/|Server/RaceManager/[A-Za-z0-9_-]+\.lua)$' || true)
+          [ -z "$bad" ] || fail "the in-game updater refuses a release with these paths: $bad"
+
+      # --- The Linux installer: one file, the package packed onto a script ---
+      #
+      # Tested here against scratch server folders before anything is
+      # published: fresh, update over leftovers, renamed resources, a running
+      # server, a failed write, not a server.
+      - name: Build and test the Linux installer
+        run: |
+          bash installer/linux/build.sh package PRM-Install.sh
+          bash installer/linux/test.sh PRM-Install.sh package
 
       # --- The release notes are the CHANGELOG since the last release ---
       #
@@ -183,22 +200,36 @@ jobs:
             echo
             echo "#### Install"
             echo
-            echo "Extract the zip into the server's \`Resources/\` folder and restart the server."
-            echo "Players get the client mod as they join. Each driver adds the apps once from"
-            echo "**HUD Apps** (search *PRM*): **Phoenix Race Manager (PRM)** (required; Racing, Info), and the optional"
-            echo "**Race Lights (PRM)** and **Radar (PRM)** (Racing)."
+            echo "**Windows:** download **PRM-Setup.exe** below and open it. It finds your BeamMP server,"
+            echo "installs PRM into it and keeps anything it replaces in the server's \`_attic\` folder."
+            echo "Windows may say it does not recognise the file: **More info**, then **Run anyway**."
+            echo
+            echo "**Linux:** in the server's folder, run"
+            echo "\`curl -fsSLO https://github.com/${{ github.repository }}/releases/download/$tag/PRM-Install.sh && bash PRM-Install.sh\`"
+            echo
+            echo "**Hosting panel with no shell:** upload **RaceManager-$tag.zip** into the server's"
+            echo "\`Resources/\` folder and extract it there."
+            echo
+            echo "Then start the server, or restart it. Players get the client mod as they join. Each driver adds"
+            echo "the apps once from **HUD Apps** (search *PRM*): **Phoenix Race Manager (PRM)** (required; Racing, Info),"
+            echo "and the optional **Race Lights (PRM)** and **Radar (PRM)** (Racing)."
+            echo
+            echo "A server already running a release with the in-game updater can install this one"
+            echo "from the **Admin** tab instead: **Update and restart**."
           } >> notes.md
           echo "title=$tag - ${head#*- }" >> "$GITHUB_OUTPUT"
           cat notes.md
 
-      # --- Publish as a Release ---
-      - name: Create Release
-        uses: softprops/action-gh-release@v3
+      # --- Hand the files to the next two jobs ---
+      - name: Upload release files
+        uses: actions/upload-artifact@v7
         with:
-          tag_name: ${{ steps.version.outputs.new_tag }}
-          name: ${{ steps.notes.outputs.title }}
-          body_path: notes.md
-          files: RaceManager-${{ steps.version.outputs.new_tag }}.zip
+          name: release-files
+          if-no-files-found: error
+          path: |
+            RaceManager-${{ steps.version.outputs.new_tag }}.zip
+            PRM-Install.sh
+            notes.md
 
       # --- Also attach to the run as an artifact (optional) ---
       - name: Upload artifact
@@ -206,3 +237,79 @@ jobs:
         with:
           name: RaceManager-${{ steps.version.outputs.new_tag }}
           path: package/
+
+  # --- The Windows installer: the release zip inside a small exe ---
+  #
+  # Built with the C# compiler that is part of Windows (installer/windows/
+  # build.ps1), then run against scratch server folders the way the Linux one
+  # is. Nothing is published if it fails.
+  windows-installer:
+    needs: package
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download release files
+        uses: actions/download-artifact@v8
+        with:
+          name: release-files
+          path: dist
+
+      - name: Build and test PRM-Setup.exe
+        run: |
+          $zip = "dist/RaceManager-${{ needs.package.outputs.tag }}.zip"
+          ./installer/windows/build.ps1 -Zip $zip -Out dist/PRM-Setup.exe
+          ./installer/windows/test.ps1 -Exe dist/PRM-Setup.exe -Zip $zip
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-installer
+          if-no-files-found: error
+          path: dist/PRM-Setup.exe
+
+  # --- Tag and publish, once every file has passed ---
+  release:
+    needs: [package, windows-installer]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Download the zip, the Linux installer and the notes
+        uses: actions/download-artifact@v8
+        with:
+          name: release-files
+          path: dist
+
+      - name: Download the Windows installer
+        uses: actions/download-artifact@v8
+        with:
+          name: windows-installer
+          path: dist
+
+      - name: Create tag
+        run: |
+          tag="${{ needs.package.outputs.tag }}"
+          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            git tag "$tag" "$GITHUB_SHA"
+            git push origin "$tag"
+          fi
+
+      # PRM-Setup.exe and PRM-Install.sh carry no version in their names, so
+      # releases/latest/download/<name> is a link that always gets the newest:
+      # the README's install links depend on it.
+      - name: Create Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.package.outputs.tag }}
+          name: ${{ needs.package.outputs.title }}
+          body_path: dist/notes.md
+          files: |
+            dist/PRM-Setup.exe
+            dist/PRM-Install.sh
+            dist/RaceManager-${{ needs.package.outputs.tag }}.zip

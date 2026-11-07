@@ -113,6 +113,10 @@ local CFG = {
   mapRestartGrace = 90,      -- seconds to wait for an outside restart (watch)
   mapVoting       = true,    -- drivers may call a map vote; admins always can
   mapVotePercent  = 60,      -- share of everyone connected who must vote yes
+
+  -- Updates from GitHub. See update.lua. false never contacts GitHub at all.
+  updateCheck     = true,
+  updateRepo      = 'aosjay13/BeamNG-Race-Manager-by-Phoenix',  -- owner/name
 }
 -- Forward declarations: the layout store's validators are needed by the grid
 -- hold code above them.
@@ -1331,6 +1335,8 @@ local function broadcastState(targetPid)
     youRole      = selfRole,
     -- The results folder, for admin sends only; nil if unresolved.
     resultsPath  = selfAdmin and resultsFolderPath() or nil,
+    -- Admin sends only: is a newer release out, and an update under way.
+    prmUpdate    = selfAdmin and race.updateSnapshot and race.updateSnapshot(targetPid) or nil,
     drivers      = buildDrivers(),
   })
   MP.TriggerClientEvent(targetPid or -1, 'RM_Update', payload)
@@ -1486,6 +1492,8 @@ function RM_onLogin(pid, rawData)
     -- path only ride a targeted send, and the app's own request came before the
     -- login.
     broadcastState(pid)
+    -- A server up for days looks for a newer release again.
+    if race.updateOnLogin then race.updateOnLogin() end
     print('[RaceManager] ' .. role .. ' login OK: ' .. (MP.GetPlayerName(pid) or pid))
   else
     authenticatedPlayers[pid] = nil
@@ -4795,6 +4803,16 @@ local function applyConfigTable(data)
   num('mapRestartGrace', 10, 3600)
   bool('mapVoting')
   num('mapVotePercent', 1, 100)
+  bool('updateCheck')
+  -- owner/name and nothing else: it becomes part of a URL a download job runs.
+  if type(data.updateRepo) == 'string' then
+    local repo = data.updateRepo
+    if #repo <= 140 and repo:match('^[%w][%w%-]*/[%w%-%._]+$') and not repo:find('..', 1, true) then
+      CFG.updateRepo = repo; applied = applied + 1
+    else
+      print('[RaceManager] config.json: updateRepo is not owner/name, ignored')
+    end
+  end
   -- min above max would ghost nobody: swapped.
   if CFG.ghostMinSeconds > CFG.ghostMaxSeconds then
     print('[RaceManager] config.json: ghostMinSeconds is above ghostMaxSeconds; swapping them')
@@ -4866,6 +4884,8 @@ local function configFileText()
     mapRestartGrace = CFG.mapRestartGrace,
     mapVoting       = CFG.mapVoting,
     mapVotePercent  = CFG.mapVotePercent,
+    updateCheck     = CFG.updateCheck,
+    updateRepo      = CFG.updateRepo,
   })
 end
 
@@ -6726,14 +6746,63 @@ end
         if sessionUnderWay() then return 'a session is running' end
         if race.derbyUnderWay() then return 'a derby is running' end
         if race.dragUnderWay() then return 'a drag pass is running' end
+        if race.updateBusy and race.updateBusy() then return 'an update is under way' end
         return nil
       end,
     })
     race.mapsWarm = mod.warm
     race.mapLabel = mod.labelFor
+    -- For update.lua: one restart at a time, and the same restart. Looked up
+    -- on the module at call time, so the tests can stand in for the probe.
+    race.mapsBusy = function ()
+      if mod.vote then return 'a map vote is running' end
+      if mod.state.phase ~= 'idle' then return 'a map switch is under way' end
+      return nil
+    end
+    race.mapsRestart = {
+      probe           = function () return mod.probe() end,
+      resolve         = function (info, noWatch) return mod.resolveRestart(info, noWatch) end,
+      spawnRelauncher = function (info) return mod.spawnRelauncher(info) end,
+      stopServer      = function (why) return mod.stopServer(why) end,
+    }
   else
     print('[RaceManager] maps.lua did not load, so map switching is off: ' .. tostring(mod))
   end
+end)()
+
+-- ===========================================================================
+-- UPDATES FROM GITHUB: its own module, installed the way maps.lua is. Its
+-- state rides each admin's own broadcastState; it restarts through maps.lua.
+-- ===========================================================================
+;(function ()
+  local ok, mod = pcall(require, 'update')
+  if not (ok and type(mod) == 'table') then
+    print('[RaceManager] update.lua did not load, so in-game updates are off: ' .. tostring(mod))
+    return
+  end
+  mod.paths.data = DATA_DIR
+  mod.init({
+    RM_BUILD = RM_BUILD, CFG = CFG,
+    requireAuth = requireAuth, requireFull = auth.requireFull, isFull = auth.isFull,
+    notifyField = notifyField,
+    pushAdmins = function ()
+      for pid in pairs(authenticatedPlayers) do broadcastState(pid) end
+    end,
+    busy = function ()
+      if sessionUnderWay() then return 'a session is running' end
+      if race.derbyUnderWay() then return 'a derby is running' end
+      if race.dragUnderWay() then return 'a drag pass is running' end
+      return race.mapsBusy and race.mapsBusy() or nil
+    end,
+    -- nil when maps.lua did not load: the update then says to install by hand.
+    restart = race.mapsRestart,
+    jsonParse = jsonParse, jsonStringify = jsonStringify,
+    listDirectory = listDirectory, makeDirectory = makeDirectory, removeFile = removeFile,
+  })
+  race.updateSnapshot = mod.snapshot
+  race.updateWarm     = mod.warm
+  race.updateOnLogin  = mod.onLogin
+  race.updateBusy     = mod.underWay
 end)()
 
 -- ===========================================================================
@@ -8844,6 +8913,12 @@ function onInit()
   MP.RegisterEvent('RM_MapTick',          'RM_MapTick')
   MP.RegisterEvent('onPlayerAuth',        'RM_Map_onPlayerAuth')
   MP.RegisterEvent('onPlayerDisconnect',  'RM_Map_onPlayerDisconnect')
+  -- Updates from GitHub (isolated module; see update.lua). RM_UpdateTick is its timer.
+  MP.RegisterEvent('RM_UpdateCheck',      'RM_onUpdateCheck')
+  MP.RegisterEvent('RM_UpdateStart',      'RM_onUpdateStart')
+  MP.RegisterEvent('RM_UpdateCancel',     'RM_onUpdateCancel')
+  MP.RegisterEvent('RM_UpdateTick',       'RM_UpdateTick')
+  MP.RegisterEvent('onPlayerAuth',        'RM_Update_onPlayerAuth')
   -- Lap records (isolated module; see records.lua). Request is open to anyone.
   MP.RegisterEvent('RM_RecordsRequest',   'RM_onRecordsRequest')
   MP.RegisterEvent('RM_RecordsClear',     'RM_onRecordsClear')
@@ -8877,6 +8952,7 @@ function onInit()
   cupWarm()          -- and a cup left running when the server went down
   race.dragWarm()    -- and a drag ladder left half-run when it did
   if race.mapsWarm then race.mapsWarm() end  -- and whether a map switch took
+  if race.updateWarm then race.updateWarm() end  -- an update too, then ask GitHub
   print('[RaceManager] Server plugin loaded (build ' .. RM_BUILD
     .. ', circuit edition, map: ' .. getCurrentMap() .. ')')
 end

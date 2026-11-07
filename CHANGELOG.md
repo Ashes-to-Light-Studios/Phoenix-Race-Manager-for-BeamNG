@@ -6,6 +6,39 @@ tag, the packaged zip, and the build stamp the app shows - see the note in
 
 [← Back to the README](README.md)
 
+## Unreleased - One-file installers, and updates from the Admin tab
+
+#### Added
+
+- **Download, open, installed.** Each release now carries **PRM-Setup.exe**
+  for Windows and **PRM-Install.sh** for Linux, each holding the whole release.
+  The Windows one is a single window: it finds the BeamMP server (the folder it
+  installed into last time, a running server, or a search of the drives),
+  shows what is installed there, and **Install** does the rest. Both stop if
+  the server is running, copy anything they replace to `_attic/` in the server
+  folder, move out a plugin file the release no longer has, a second copy of
+  the PRM client zip and another Race Manager plugin folder, follow a renamed
+  `ResourceFolder`, put every file back if a write fails, and never touch
+  `Data/`. The README links straight to the newest of each. The zip is still
+  on every release, for hosting panels with no shell and for the in-game
+  updater.
+
+- **The server updates Phoenix Race Manager from the game.** At startup it asks
+  GitHub for the newest release, in the background. When that release is newer,
+  an admin who logs in is asked in a band at the top of the app, and the new
+  **Updates** row on the **Admin** panel has **Update and restart**. It
+  downloads the release zip, checks it against the SHA-256 GitHub lists and that
+  every plugin file compiles, gives everyone a 10 second countdown, copies the
+  files it replaces to `_attic/` in the server folder, swaps in the client zip
+  and the plugin, and restarts the server the way a map switch does. Players
+  download the new client as they rejoin. A plugin file the new release no
+  longer has is moved out, because BeamMP runs every `.lua` in the folder.
+  Nothing in `Data/` is touched. A failed check stops before anyone is
+  disconnected, and a failed write puts every file back. The admin tier's only;
+  never while a session, derby or drag pass runs. `updateCheck` (on) and
+  `updateRepo` in `config.json`. This release is installed with an installer
+  or by hand; the ones after it can be installed from the game.
+
 ## 0.21.0 - Move grid slots together, none under the map, and two security fixes
 
 #### Added

@@ -2204,6 +2204,11 @@ var rectSeen = { width: null, length: null, rot: null, wall: null, wallDepth: nu
           $scope.adminPresent = !!data.adminPresent;
           // Targeted admin sends only, so a non-admin never even sees the row.
           if (typeof data.resultsPath === 'string') { $scope.resultsPath = data.resultsPath; }
+          // The same: a newer release, and an update under way.
+          if (data.prmUpdate && typeof data.prmUpdate === 'object') {
+            $scope.prmUpdate = data.prmUpdate;
+            if (data.prmUpdate.phase !== 'idle') { $scope.updateUi.confirm = false; }
+          }
           if ($scope.adminPresent && !$scope.isAdmin && !$scope.loginPinned) {
             $scope.showLogin = false;
           }
@@ -4208,6 +4213,66 @@ var rectSeen = { width: null, length: null, rot: null, wall: null, wallDepth: nu
           case 'manual':   return 'Restart: by hand.';
           default:         return 'Restart: the Management Tool if it started the server, otherwise Race Manager.';
         }
+      };
+
+      // ------------------------------------------------------------------
+      // Updates from GitHub (server/RaceManager/update.lua)
+      // ------------------------------------------------------------------
+      // The state rides this admin's own RaceManagerUpdate (prmUpdate). The
+      // banner asks once per app load and version; Not now hides it, and the
+      // Admin tab keeps the button. Installing is the admin tier's.
+      $scope.prmUpdate = null;
+      $scope.updateUi = { confirm: false, notes: false, dismissed: null };
+      $scope.updateAvailable = function () {
+        var u = $scope.prmUpdate;
+        return !!(u && u.available && u.latest);
+      };
+      // Never over a running session: the banner waits for the field to be idle.
+      $scope.updateAskShowing = function () {
+        var u = $scope.prmUpdate;
+        return $scope.isFullAdmin() && $scope.updateAvailable() && u.phase === 'idle'
+          && !u.busy && $scope.updateUi.dismissed !== u.latest && !$scope.broadcastMode();
+      };
+      $scope.updateDismiss = function () {
+        $scope.updateUi.dismissed = $scope.prmUpdate ? $scope.prmUpdate.latest : null;
+        $scope.updateUi.confirm = false;
+      };
+      $scope.updateAsk = function () { $scope.updateUi.confirm = true; };
+      $scope.updateAskCancel = function () { $scope.updateUi.confirm = false; };
+      $scope.updateStart = function () {
+        var u = $scope.prmUpdate;
+        $scope.updateUi.confirm = false;
+        if (!u || !u.latest) { return; }
+        bngApi.engineLua('raceManager.updateStart(' + luaStr(u.latest) + ')');
+      };
+      $scope.updateCancel = function () {
+        bngApi.engineLua('raceManager.updateCancel()');
+      };
+      $scope.updateCheck = function () {
+        bngApi.engineLua('raceManager.updateCheck()');
+      };
+      $scope.updateToggleNotes = function () { $scope.updateUi.notes = !$scope.updateUi.notes; };
+      // Seconds since 1970 (the server's os.time) as this PC's local time.
+      $scope.updateWhen = function (sec) {
+        if (!sec) { return ''; }
+        var d = new Date(sec * 1000);
+        var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+          + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+      };
+      $scope.updateStatusText = function () {
+        var u = $scope.prmUpdate;
+        if (!u) { return ''; }
+        if (!u.enabled) { return 'Update checks are off (updateCheck in config.json).'; }
+        if (u.checking) { return 'Asking GitHub for the newest release…'; }
+        if ($scope.updateAvailable()) {
+          return 'v' + u.latest + ' is out' + (u.title ? ': ' + u.title : '') + '.';
+        }
+        if (u.latest) {
+          return 'Up to date' + (u.checkedAt ? ', checked ' + $scope.updateWhen(u.checkedAt) : '') + '.';
+        }
+        // A failed look says why on its own line.
+        return u.checkError ? '' : 'Not checked yet.';
       };
 
       // ------------------------------------------------------------------
