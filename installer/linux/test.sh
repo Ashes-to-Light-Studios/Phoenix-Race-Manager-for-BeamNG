@@ -71,13 +71,17 @@ check '! [ -e "$renamed/Resources" ]' 'and nothing goes to Resources'
 if command -v pgrep >/dev/null 2>&1 && [ -d /proc/self ]; then
   running="$root/running"
   new_server "$running" "$config"
-  cp "$(command -v sleep)" "$running/BeamMP-Server"
-  (cd "$running" && exec ./BeamMP-Server 30) &
+  # A renamed bash, not sleep: newer coreutils is one program that refuses to
+  # run under another name. Two commands, or bash execs sleep and the process
+  # stops being called BeamMP-Server.
+  cp "$(command -v bash)" "$running/BeamMP-Server"
+  (cd "$running" && exec ./BeamMP-Server -c 'sleep 30; true') &
   fake=$!
   sleep 0.5
+  check 'pgrep -x BeamMP-Server >/dev/null' 'the stand-in server is running under its name'
   check '! run "$running"' 'a server that is running is refused'
   check '! [ -e "$running/Resources" ]' 'and nothing is written'
-  kill "$fake" 2>/dev/null; wait "$fake" 2>/dev/null
+  pkill -P "$fake" 2>/dev/null; kill "$fake" 2>/dev/null; wait "$fake" 2>/dev/null
 else
   echo "(skipped the running-server check: no pgrep here)"
 fi
