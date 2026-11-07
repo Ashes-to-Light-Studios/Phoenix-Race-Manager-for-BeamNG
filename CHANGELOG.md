@@ -6,7 +6,7 @@ tag, the packaged zip, and the build stamp the app shows - see the note in
 
 [← Back to the README](README.md)
 
-## Unreleased - Move grid slots together, none under the map
+## 0.21.0 - Move grid slots together, none under the map, and two security fixes
 
 #### Added
 
