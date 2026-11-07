@@ -1,0 +1,68 @@
+name: Publish download page
+
+# site/ is the download page people are sent to, published by GitHub Pages at
+#   https://aosjay13.github.io/BeamNG-Race-Manager-by-Phoenix/
+# Its link preview (og.jpg, the title and the description) is what Discord and
+# forums show for that URL; a release page's preview is GitHub's own and fixed.
+#
+# PAGES IS SWITCHED ON ONCE, by a repo admin: Settings, Pages, Source: GitHub
+# Actions. Until then the check below says so and the run stays green, rather
+# than failing on every push. Then run this workflow once by hand.
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time. A newer push waits rather than cancelling one
+# half done.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.pages.outputs.enabled }}
+    steps:
+      - name: Is GitHub Pages switched on?
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if source=$(gh api "repos/${{ github.repository }}/pages" --jq .build_type 2>/dev/null); then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            [ "$source" = workflow ] || echo "::warning::Pages builds from a branch, so this site is not what gets served. Set Settings, Pages, Source to GitHub Actions."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GitHub Pages is off, so the download page was not published. A repo admin turns it on once (Settings, Pages, Source: GitHub Actions), then runs this workflow again."
+          fi
+
+  deploy:
+    needs: check
+    if: needs.check.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5
