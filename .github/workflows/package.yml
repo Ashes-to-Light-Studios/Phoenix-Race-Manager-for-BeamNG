@@ -180,6 +180,11 @@ jobs:
       # version since the previous release tag is included: versions deployed
       # but never published would otherwise vanish from the notes of the one
       # that was. A version with no CHANGELOG section stops here.
+      #
+      # THE DOWNLOAD COMES FIRST. releases/latest is the link people are given,
+      # and it opens on these notes, so the install block goes above the
+      # changes, linked straight to this release's files. One line a paragraph:
+      # a release body shows every line break.
       - name: Release notes
         id: notes
         run: |
@@ -194,29 +199,26 @@ jobs:
             $0 == h { on = 1; next }
             on && stop != "##  " && index($0, stop) == 1 { exit }
             on { print }
-          ' CHANGELOG.md > notes.md
-          [ -s notes.md ] || fail "the CHANGELOG section for $ver is empty"
+          ' CHANGELOG.md > changes.md
+          [ -s changes.md ] || fail "the CHANGELOG section for $ver is empty"
+          files="https://github.com/${{ github.repository }}/releases/download/$tag"
           {
+            echo "### Install"
             echo
-            echo "#### Install"
+            echo "**Windows:** download **[PRM-Setup.exe]($files/PRM-Setup.exe)** and open it. It finds your BeamMP server, installs PRM into it and keeps anything it replaces in the server's \`_attic\` folder. Windows may say it does not recognise the file: **More info**, then **Run anyway**."
             echo
-            echo "**Windows:** download **PRM-Setup.exe** below and open it. It finds your BeamMP server,"
-            echo "installs PRM into it and keeps anything it replaces in the server's \`_attic\` folder."
-            echo "Windows may say it does not recognise the file: **More info**, then **Run anyway**."
+            echo "**Linux:** in the server's folder, run \`curl -fsSLO $files/PRM-Install.sh && bash PRM-Install.sh\`"
             echo
-            echo "**Linux:** in the server's folder, run"
-            echo "\`curl -fsSLO https://github.com/${{ github.repository }}/releases/download/$tag/PRM-Install.sh && bash PRM-Install.sh\`"
+            echo "**Hosting panel with no shell:** upload **[RaceManager-$tag.zip]($files/RaceManager-$tag.zip)** into the server's \`Resources/\` folder and extract it there."
             echo
-            echo "**Hosting panel with no shell:** upload **RaceManager-$tag.zip** into the server's"
-            echo "\`Resources/\` folder and extract it there."
+            echo "Then start the server, or restart it. Players get the client mod as they join. Each driver adds the apps once from **HUD Apps** (search *PRM*): **Phoenix Race Manager (PRM)** (required; Racing, Info), and the optional **Race Lights (PRM)** and **Radar (PRM)** (Racing)."
             echo
-            echo "Then start the server, or restart it. Players get the client mod as they join. Each driver adds"
-            echo "the apps once from **HUD Apps** (search *PRM*): **Phoenix Race Manager (PRM)** (required; Racing, Info),"
-            echo "and the optional **Race Lights (PRM)** and **Radar (PRM)** (Racing)."
+            echo "A server already running a release with the in-game updater can install this one from the **Admin** tab instead: **Update and restart**."
             echo
-            echo "A server already running a release with the in-game updater can install this one"
-            echo "from the **Admin** tab instead: **Update and restart**."
-          } >> notes.md
+            echo "### What changed"
+            echo
+            cat changes.md
+          } > notes.md
           echo "title=$tag - ${head#*- }" >> "$GITHUB_OUTPUT"
           cat notes.md
 
