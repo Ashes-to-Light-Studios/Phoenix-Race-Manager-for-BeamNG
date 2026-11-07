@@ -7,7 +7,10 @@
 *.js   text eol=lf
 *.html text eol=lf
 *.json text eol=lf
+# The Linux installer runs under bash, which a CRLF checkout breaks.
+*.sh   text eol=lf
 
 # Build artifacts and images: never converted, never diffed as text.
 *.zip binary
 *.png binary
+*.ico binary

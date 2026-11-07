@@ -43,6 +43,7 @@ one so the headless tests exercise the real file format).
 | `results/*.txt` | One results file per finished session | Clear Results Cache |
 | `mapSwitch.json` | A map switch waiting for its restart, so the next boot can say whether it took | The next boot |
 | `mapNames.json` | Display names for maps, by level name | Renaming each map back |
+| `update/last.json` | The last in-game update: from, to, when, by whom, and the `_attic` folder holding the old files | The next update |
 | `Lap Records/<map>.json` | Each driver's best lap per saved layout on that map | Clear Board, or deleting the file |
 
 `roster.json` and `cup.json` are deliberately **not** under `results/`: Clear
@@ -51,25 +52,26 @@ routine housekeeping can destroy is not persistent in any sense that matters.
 
 ## Modules inside the server plugin
 
-Six parts of the plugin are self-contained: **Demo Derby**, **drag racing**,
-**map switching**, **lap records**, the **driver roster** and the **cup**. Each has its own
-state tables, its own `RM_*` event namespace and its own broadcast channel, and
-none of them is reachable from the racing state machine except through a
-handful of named functions declared at the top of the file.
+Seven parts of the plugin are self-contained: **Demo Derby**, **drag racing**,
+**map switching**, **lap records**, **updates**, the **driver roster** and the
+**cup**. Each has its own state tables, its own `RM_*` event namespace and its
+own broadcast channel, and none of them is reachable from the racing state
+machine except through a handful of named functions declared at the top of the
+file.
 
-The first four are separate FILES (`derby.lua`, `drag.lua`, `maps.lua`,
-`records.lua`) required as siblings; the other two are `do ... end` blocks
-inside `main.lua`.
+The first five are separate FILES (`derby.lua`, `drag.lua`, `maps.lua`,
+`records.lua`, `update.lua`) required as siblings; the other two are
+`do ... end` blocks inside `main.lua`.
 Same isolation either way, reached two different ways for the same reason:
 Lua's 200-local ceiling.
 
 **BeamMP runs every `.lua` in the plugin folder on its own**, alphabetically,
 before `main.lua` requires any of them. `derby.lua` and `drag.lua` sort before
 `main.lua`, so the copy `main.lua` initialises is the one whose global handlers
-win. `maps.lua` and `records.lua` sort after, so they define nothing global at
-file scope: their `RM_Map*` and `RM_Records*` handlers are installed by
-`init()`, and `tests/maps_test.lua` and `tests/records_test.lua` check that
-loading either file alone defines nothing. A new module must do the same
+win. `maps.lua`, `records.lua` and `update.lua` sort after, so they define
+nothing global at file scope: their `RM_Map*`, `RM_Records*` and `RM_Update*`
+handlers are installed by `init()`, and each one's test checks that loading the
+file alone defines nothing. A new module must do the same
 unless its name sorts before `main`.
 
 **Map switching restarts the server**, because BeamMP reads its map and hashes
@@ -79,6 +81,32 @@ layout), rewrites only the `Map` value in `ServerConfig.toml`, and restarts by
 whichever means is available: the Management Tool's config watch, a detached
 helper that waits for this process to exit and starts it again, or `exit()` for
 a service manager. See [Switching maps](REFERENCE.md#switching-maps).
+
+**Updates restart the server the same way**, through `maps.lua`'s helper and
+`exit()`, never its config watch. Three choices in `update.lua` are load-bearing:
+
+- **Downloads run in a process of their own** (curl, or wget on Linux) that
+  leaves a `.done` file holding its exit code, polled once a second, so the Lua
+  state never waits on the network. On Windows it is started through
+  `Start-Process`, which hands it none of the server's sockets.
+- **The zip is read in plain Lua**: SHA-256 against the digest GitHub lists,
+  CRC-32 per entry and inflate, about a second for a release, because many Linux
+  hosts have no `unzip`. It installs only `Client/RaceManager.zip` and top-level
+  `Server/RaceManager/*.lua`, and refuses a release with any other path rather
+  than install half of one. The package workflow fails a release that has one.
+- **Its state rides each admin's own `RM_Update`** (`prmUpdate`, from
+  `broadcastState(pid)`), not an event of its own. A client binds its server
+  events once per game session, so an event added in a new release would not
+  reach an admin who rejoined after updating without restarting the game.
+
+**The installers apply the same rules from outside the game.**
+`installer/windows` is a C# 5 WinForms program built with the compiler that is
+part of .NET Framework 4.x, so building it and running it need nothing
+installed; the release zip is embedded in the exe. `installer/linux` is a bash
+script with the package appended as a base64 tarball, because tar and base64
+are on every Linux and unzip is not. Each has a test (`test.ps1`, `test.sh`)
+that the package workflow runs against scratch server folders before anything
+is published.
 
 **Lap records are a consumer of results, like the cup.** `finishSession` calls
 them once per session through `race.recordsSession`, after the joker ruling.

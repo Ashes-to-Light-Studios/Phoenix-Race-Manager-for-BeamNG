@@ -39,7 +39,7 @@ local server = readFile('server/RaceManager/main.lua')
 -- Concatenated rather than searched file by file, because the question this
 -- test asks is "does a global by this name exist anywhere in the plugin", and
 -- that is exactly what BeamMP asks when the event fires.
-local serverModules = { 'derby', 'drag', 'maps', 'records' }
+local serverModules = { 'derby', 'drag', 'maps', 'records', 'update' }
 local plugin = server
 for _, m in ipairs(serverModules) do
   plugin = plugin .. readFile('server/RaceManager/' .. m .. '.lua')

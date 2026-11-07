@@ -627,6 +627,28 @@
     <button class="rm-btn rm-btn-mini" ng-class="{'rm-btn-end': mapsVoted(false)}" ng-click="mapsVote(false)">No</button>
   </div>
 
+  <!-- A NEWER RELEASE IS OUT: the server asked GitHub at startup. Admins only,
+       never over a session. It disconnects everyone and restarts the server,
+       so it asks twice; Not now hides it until the app next loads. -->
+  <div class="rm-update-ask" ng-if="updateAskShowing()">
+    <div class="rm-mapvote-row">
+      <span class="rm-cup-title">Update</span>
+      <span class="rm-mapvote-q">Phoenix Race Manager v{{ prmUpdate.latest }} is out. This server runs v{{ prmUpdate.current }}.</span>
+    </div>
+    <div class="rm-mapvote-row" ng-if="!updateUi.confirm">
+      <button class="rm-btn rm-btn-mini rm-btn-start" ng-click="updateAsk()"
+              title="Downloads the release from GitHub, checks it, installs it and restarts the server">Update and restart</button>
+      <button class="rm-btn rm-btn-mini" ng-click="updateToggleNotes()">{{ updateUi.notes ? 'Hide notes' : 'Release notes' }}</button>
+      <button class="rm-btn rm-btn-mini" ng-click="updateDismiss()" title="The Admin tab keeps the button">Not now</button>
+    </div>
+    <span class="rm-confirm" ng-if="updateUi.confirm">
+      Everyone is disconnected and the server restarts.
+      <button class="rm-btn rm-btn-mini rm-btn-end" ng-click="updateStart()">Yes, update</button>
+      <button class="rm-btn rm-btn-mini" ng-click="updateAskCancel()">Cancel</button>
+    </span>
+    <div class="rm-update-notes" ng-if="updateUi.notes && prmUpdate.notes">{{ prmUpdate.notes }}</div>
+  </div>
+
   <!-- CALLING A MAP VOTE, from a driver's side. A menu panel for the same
        reason the garage is. Hidden while an admin has voting locked. -->
   <div class="rm-mapvote rm-pop" ng-if="menu.open === 'maps' && !isAdmin && menuShowing() && maps.voting && !maps.vote">
@@ -3275,6 +3297,57 @@
              ng-blur="mapsVotePercent()" ng-keydown="$event.keyCode === 13 && mapsVotePercent()">
       <span class="rm-layouts-hint">% of everyone connected voting yes. Not voting counts as no.</span>
     </div>
+
+    <!-- UPDATES. Installing is the admin tier's: it cannot be undone from here.
+         It restarts the server the way a map switch does, so it asks first. -->
+    <div class="rm-adminbar rm-update" ng-if="isAdmin && prmUpdate">
+      <span class="rm-adminbar-label">Updates</span>
+      <span class="rm-maps-current" title="The Phoenix Race Manager this server runs">v{{ prmUpdate.current }}</span>
+      <span class="rm-layouts-hint">{{ updateStatusText() }}</span>
+      <button class="rm-btn rm-btn-mini rm-btn-start"
+              ng-if="isFullAdmin() && updateAvailable() && prmUpdate.phase === 'idle' && !updateUi.confirm"
+              ng-disabled="prmUpdate.busy" ng-click="updateAsk()"
+              title="Downloads the release from GitHub, checks it, installs it and restarts the server">Update and restart</button>
+      <span class="rm-confirm" ng-if="updateUi.confirm && prmUpdate.phase === 'idle'">
+        Install v{{ prmUpdate.latest }}? Everyone is disconnected and the server restarts.
+        <button class="rm-btn rm-btn-mini rm-btn-end" ng-click="updateStart()">Yes, update</button>
+        <button class="rm-btn rm-btn-mini" ng-click="updateAskCancel()">Cancel</button>
+      </span>
+      <span class="rm-confirm" ng-if="prmUpdate.phase === 'downloading' || prmUpdate.phase === 'verifying'">
+        {{ prmUpdate.phase === 'downloading' ? 'Downloading' : 'Checking' }} v{{ prmUpdate.target }}…
+        <button class="rm-btn rm-btn-mini" ng-click="updateCancel()">Stop</button>
+      </span>
+      <span class="rm-confirm" ng-if="prmUpdate.phase === 'countdown'">
+        Restarting to install v{{ prmUpdate.target }} in {{ prmUpdate.left }}s
+        <button class="rm-btn rm-btn-mini" ng-click="updateCancel()">Stop</button>
+      </span>
+      <span class="rm-confirm" ng-if="prmUpdate.phase === 'kicking' || prmUpdate.phase === 'applying'">
+        Installing v{{ prmUpdate.target }} and restarting…
+      </span>
+      <button class="rm-btn rm-btn-mini" ng-if="updateAvailable() && prmUpdate.notes"
+              ng-click="updateToggleNotes()">{{ updateUi.notes ? 'Hide notes' : 'Release notes' }}</button>
+      <button class="rm-btn rm-btn-mini" ng-if="prmUpdate.enabled && prmUpdate.phase === 'idle'"
+              ng-disabled="prmUpdate.checking" ng-click="updateCheck()"
+              title="Ask GitHub for the newest release now">Check now</button>
+      <span class="rm-layouts-hint" ng-if="updateAvailable() && prmUpdate.busy && prmUpdate.phase === 'idle'">
+        Not while {{ prmUpdate.busy }}.
+      </span>
+      <span class="rm-layouts-hint" ng-if="updateAvailable() && !prmUpdate.canUpdate">
+        Installing it needs the admin password.
+      </span>
+      <span class="rm-maps-error" ng-if="prmUpdate.error">{{ prmUpdate.error }}</span>
+      <span class="rm-maps-error" ng-if="prmUpdate.checkError && prmUpdate.enabled">Could not check: {{ prmUpdate.checkError }}</span>
+      <span class="rm-layouts-hint" ng-if="prmUpdate.last">
+        Last update: v{{ prmUpdate.last.from }} to v{{ prmUpdate.last.to }}<span ng-if="prmUpdate.last.at">,
+        {{ updateWhen(prmUpdate.last.at) }}</span>{{ prmUpdate.last.ok ? ', done' : ', did not take' }}.
+      </span>
+      <div class="rm-update-notes" ng-if="updateUi.notes && prmUpdate.notes">{{ prmUpdate.notes }}</div>
+      <span class="rm-layouts-hint">
+        Players get the new version as they rejoin. The files it replaces are
+        kept in the server's _attic folder.
+      </span>
+      <span class="rm-layouts-hint" ng-if="prmUpdate.url">Release page: {{ prmUpdate.url }}</span>
+    </div>
     <div class="rm-adminbar">
       <span class="rm-adminbar-label">Results</span>
       <!-- Two presses. The file this deletes is the only record a league has of
@@ -5072,6 +5145,7 @@
   .rm-root > .rm-login,
   .rm-root > .rm-readybar,
   .rm-root > .rm-mapvote-live,
+  .rm-root > .rm-update-ask,
   .rm-root > .rm-spectator-bar,
   .rm-root > .rm-vehicle-error,
   .rm-root > .rm-notice,
@@ -6299,6 +6373,29 @@
     background: rgba(52, 168, 83, 0.12);
   }
   .rm-mapvote-q { font-size: 12px; font-weight: 600; color: #e8eaed; }
+  /* A newer release: the map vote's band, in the blue the app uses for info. */
+  .rm-update-ask {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(138, 180, 248, 0.45);
+    background: rgba(138, 180, 248, 0.10);
+  }
+  .rm-update-ask .rm-cup-title { color: #8ab4f8; }
+  /* The release notes as written: one box, its own line, scrolling. */
+  .rm-update-notes {
+    flex-basis: 100%;
+    max-height: 160px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    font-size: 10px;
+    color: #c8ccd0;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    padding: 4px 6px;
+  }
   /* Lap records: the garage's band, in the purple timing screens use for a best. */
   .rm-records {
     padding: 5px 10px;

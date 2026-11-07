@@ -3109,6 +3109,78 @@ manager bring it back; a second copy started by the helper would fight it for
 the port.
 
 
+## Updating from the Admin tab
+
+When the server starts it asks GitHub for the newest Phoenix Race Manager
+release, once, in the background. If that release is newer than the one the
+server runs:
+
+- The server console says so.
+- An admin who logs in is asked, in a band at the top of the app: **Update and
+  restart**, **Release notes** or **Not now**. Not now hides it until the app
+  next loads. The band never appears while a race, qualifying, a derby or a drag
+  pass is running.
+- The **Updates** row on the **Admin** panel shows the version running, the
+  newest one and **Update and restart**. **Check now** asks GitHub again.
+
+Installing is the admin tier's alone: a moderator sees the row but not the
+button, because nothing in the game can undo it.
+
+**Update and restart** asks first, then:
+
+1. Downloads the release zip from GitHub and checks it: the SHA-256 GitHub lists
+   for it, every file's checksum, that it holds the client zip and the plugin,
+   that its `main.lua` is the version offered, and that every plugin file
+   compiles. A failure stops here: nobody is disconnected and nothing changes.
+2. A 10 second countdown, shown to everyone. **Stop** cancels it.
+3. Everyone is disconnected, with a message to rejoin in about a minute. New
+   joins are turned away until the restart.
+4. The files it replaces are copied to `_attic/update-<old>-to-<new>_<date>/`
+   in the server folder, then `Resources/Client/RaceManager.zip` and the plugin's
+   `.lua` files are replaced. A plugin file the new release no longer has is
+   moved out too, because BeamMP runs every `.lua` in the folder. If any file
+   cannot be written, every file is put back and the server keeps running.
+5. The server restarts, and players download the new client as they rejoin.
+6. After the restart the Updates row shows **Last update: vA to vB, done**.
+
+Nothing in `Data/` is touched: tracks, arenas, the cup, the roster, the garage,
+settings, records and results all carry over.
+
+**How it restarts.** The way a map switch does (see [How the server
+restarts](#how-the-server-restarts)), with one difference: an update changes no
+setting, so the Management Tool's config check never fires, and under the tool
+Race Manager restarts the server itself. With `mapRestart` set to `manual`, or
+on a BeamMP server too old to stop itself (before 3.1), it does not install: it
+says so and gives the release page to install by hand.
+
+**Rolling back.** Copy the files from the `_attic` folder back into
+`Resources/` and restart the server.
+
+**Settings** in `config.json`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `updateCheck` | `true` | `false` never contacts GitHub: no check, no band, no button |
+| `updateRepo` | `aosjay13/BeamNG-Race-Manager-by-Phoenix` | Where to look, as owner/name. A fork can point it at its own releases |
+
+A release must be tagged `vX.Y.Z` and carry `RaceManager-vX.Y.Z.zip` laid out
+the way the package workflow builds it. Anything else is refused, with the
+reason on the Updates row.
+
+**What it needs.** `curl` (part of Windows 10 1803 and later) or, on Linux,
+`curl` or `wget`, and outbound HTTPS to `api.github.com` and `github.com`.
+GitHub allows 60 unsigned requests an hour from one address; the server asks at
+each start, when an admin presses **Check now**, and when an admin logs in to a
+server that has not looked for six hours. The first release with the updater is
+installed with `PRM-Setup.exe`, `PRM-Install.sh` or by hand; each release after
+it can be installed from the game.
+
+**What it trusts.** The SHA-256 check proves the download is the file the repo
+published, not who published it. So an update only ever starts when an admin
+presses the button, and nothing in GitHub's reply is run as a command: the
+download address is rebuilt from `updateRepo` and a checked version number.
+
+
 ## Lap records
 
 Every saved layout on every map has a **lap records board**: the fastest lap each

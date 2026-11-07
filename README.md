@@ -9,7 +9,7 @@ it build the starting grid, and the server writes a results file at the flag.
 
 | | |
 |---|---|
-| **[Install](#install)** | Two files, then restart the server |
+| **[Install](#install)** | One download, open it, start the server |
 | **[Run a race night](#run-a-race-night)** | The whole flow, start to finish |
 | **[What else it does](#what-else-it-does)** | Reset limits, joker laps, car locking, Demo Derby, drag racing |
 | **[Troubleshooting](#troubleshooting)** | Mostly "the app doesn't show up" |
@@ -25,17 +25,36 @@ it build the starting grid, and the server writes a results file at the flag.
 You need a **BeamMP server you control**. Racing is multiplayer-only; offline
 you get the checkpoint editor and nothing else.
 
-Download `RaceManager-vX.Y.Z.zip` from [Releases](../../releases) and extract
-it. Inside are two folders that map straight onto your server's `Resources/`
-directory. Copy them both in:
+**Windows:** download
+**[PRM-Setup.exe](https://github.com/aosjay13/BeamNG-Race-Manager-by-Phoenix/releases/latest/download/PRM-Setup.exe)**
+and open it. It finds your BeamMP server, installs PRM into it and says what it
+did. Windows may warn that it does not recognise the file: press **More info**,
+then **Run anyway**.
 
-```
-Client/RaceManager.zip        →  Resources/Client/RaceManager.zip
-Server/RaceManager/main.lua   →  Resources/Server/RaceManager/main.lua
+**Linux:** in the server's folder, run
+
+```bash
+curl -fsSLO https://github.com/aosjay13/BeamNG-Race-Manager-by-Phoenix/releases/latest/download/PRM-Install.sh && bash PRM-Install.sh
 ```
 
-Restart the server and you're done. BeamMP pushes `RaceManager.zip` to everyone
+**A hosting panel with no shell:** download `RaceManager-vX.Y.Z.zip` from
+[Releases](../../releases), upload it into the server's `Resources/` folder and
+extract it there.
+
+Then start the server, or restart it. BeamMP pushes `RaceManager.zip` to everyone
 who joins, so **players install nothing by hand**.
+
+Both installers stop if the server is running, keep anything they replace in
+the server's `_attic/` folder, move out leftovers of older installs that would
+run beside the new one, and never touch your tracks, results or settings. Run
+either again to update.
+
+**Updating** is also done from the game once a server runs a release that has
+the updater: at each start the server asks GitHub for a newer release, an admin
+is asked when they log in, and **Update and restart** on the **Admin** tab
+downloads and checks it, keeps the old files in `_attic/`, swaps the new ones in
+and restarts the server. See [Updating from the Admin
+tab](docs/REFERENCE.md#updating-from-the-admin-tab).
 
 Building from source instead? `python3 tools/deploy.py` writes the package and
 installs both halves onto a BeamMP server it finds, backing up whatever it
@@ -46,19 +65,21 @@ the old one instead of leaving two copies side by side.
 
 **Three things to get right:**
 
-1. **Deploy both halves together, and delete the old ones.** Two versions of the
-   server plugin each run their own state machine and take turns broadcasting,
-   which makes the UI flicker between two states. The app header shows a version
-   for each piece; if they don't match, something didn't copy. A stale file
-   fails *silently*: a button just stops doing anything.
+1. **Installing by hand? Deploy both halves together, and delete the old
+   ones.** (The installers do both.) Two versions of the server plugin each run
+   their own state machine and take turns broadcasting, which makes the UI
+   flicker between two states. The app header shows a version for each piece;
+   if they don't match, something didn't copy. A stale file fails *silently*: a
+   button just stops doing anything.
 2. **Change the admin password before your first public session.** It ships as
    `phoenix`. Log in, then set a new one from the **Admin password** bar in the
    **⚙** tab. There is a second, narrower **moderator** password for whoever
    runs your race nights; it ships empty, which means off. See
    [Two tiers](docs/REFERENCE.md#two-tiers-admin-and-moderator).
 3. **Upgrading from 0.6.0 or earlier on Linux?** Those packages spelled the
-   folders in lower case. Delete any leftover `Resources/client` or
-   `Resources/server`. Windows is unaffected.
+   folders in lower case. `PRM-Install.sh` moves the old install out; by hand,
+   delete any leftover `Resources/client` or `Resources/server`. Windows is
+   unaffected.
 
 ## Run a race night
 
@@ -206,6 +227,7 @@ expect without touching any of it.
 | **[Demo Derby](docs/REFERENCE.md#demo-derby-parallel-game-mode)** | A separate last-man-standing mode with its own arena, timers and results, fully isolated from the racing. |
 | **[Ready check](docs/REFERENCE.md#the-ready-check)** | Forming a grid, a derby form-up and a drag pass call the drivers instead of teleporting them into place: each presses **Ready**, and the board shows who has. Admins see the count, can Ready All or place one driver, and are asked before starting without somebody. Not ready at the start sits that session or derby out, and is a no-show on the strip. |
 | **[Map switching and votes](docs/REFERENCE.md#switching-maps)** | Change the server's map from the Admin tab, or let drivers vote for one: it passes only at a percentage of the whole lobby you choose, and a race director can lock voting. Map zips move between `custom_maps` and `Resources/Client`, and the server restarts itself onto the new map, under the BeamMP Server Management Tool or started by hand. |
+| **[Updates from the game](docs/REFERENCE.md#updating-from-the-admin-tab)** | The server looks for a newer release on GitHub at startup and asks the admin. **Update and restart** downloads it, checks it against GitHub's SHA-256, keeps the old files, swaps the new ones in and restarts the server. Tracks, the cup and results are untouched. |
 | **[Map display names](docs/REFERENCE.md#map-display-names)** | Show `bark_river_sc` as *Bark River International* in the map menus, the vote and the switch. Display only: no file is renamed. |
 | **[Lap records](docs/REFERENCE.md#lap-records)** | Each driver's fastest lap on every saved layout, per map, kept across restarts and open to everyone. Scored from qualifying and races. An admin can take a time off or clear a board in game, or edit the JSON on the server. |
 | **[Drag racing](docs/REFERENCE.md#drag-racing-parallel-game-mode)** | A tournament ladder down a drag strip: single or double elimination, or a points shootout. Two to eight cars a pass with any number going through, a christmas tree with real red lights, reaction times, elapsed times and trap speeds, and dial-in bracket racing. Scores into the cup on a table of its own. The strip is an ordinary point-to-point layout saved with the type Drag, so the track editor already builds one, and a practice pass lets one driver try it before a field turns up. |

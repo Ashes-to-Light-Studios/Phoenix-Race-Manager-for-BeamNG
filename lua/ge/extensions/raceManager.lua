@@ -5774,6 +5774,21 @@ do
   end
 end
 
+-- Updates from GitHub (server/RaceManager/update.lua). The state rides this
+-- admin's own RM_Update; these only ask. On M, for the locals ceiling.
+function M.updateCheck()
+  if inMultiplayer() then TriggerServerEvent('RM_UpdateCheck', '') end
+end
+
+function M.updateStart(version)
+  if type(version) ~= 'string' or version == '' or not inMultiplayer() then return end
+  TriggerServerEvent('RM_UpdateStart', jsonEncode({ version = version }))
+end
+
+function M.updateCancel()
+  if inMultiplayer() then TriggerServerEvent('RM_UpdateCancel', '') end
+end
+
 -- Lap records, the same way. onRecords is the RM_Records handler.
 do
   local records = require('raceManager/records')
