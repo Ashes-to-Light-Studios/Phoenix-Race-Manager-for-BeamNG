@@ -434,6 +434,12 @@ local function finishDerby(reason)
   else
     print('[RaceManager] Failed to write derby results: ' .. tostring(ok and pathOrErr or wrote))
   end
+  -- The optional Discord add-on (server/RaceManager/discord.lua).
+  if race.discordPost then
+    race.discordPost('derby', { list = derbyClassification(), duration = derby.time,
+      winner = derby.winner, arena = derby.arena, reason = reason,
+      file = ok and wrote and pathOrErr or nil })
+  end
 end
 
 -- Eliminate one participant; when exactly one is left standing the derby ends

@@ -1532,6 +1532,7 @@ Resources/Server/RaceManager/
         Lap Records/<map>.json   the lap records for that map's layouts
         mapNames.json            display names for maps
         config.json              server settings
+        discord.json             the Discord webhook and what it posts
         cup.json                 the championship
         roster.json              display names
         garage.json              the allowed vehicles
@@ -3250,6 +3251,69 @@ read again before every write, so a hand edit shows at once and is never written
 over by an older copy. While a file does not parse, nothing is written to it:
 the board says so, and that session's times on that map are not saved. A map
 whose last board is cleared loses its file.
+
+## Posting results to Discord
+
+An optional add-on: as each session closes, the server posts its results to a
+Discord channel through a webhook. **It is off until a webhook is set**, and
+with none the server never contacts Discord.
+
+**Setting it up.** In Discord, open the channel's settings: **Integrations**,
+**Webhooks**, **New Webhook**, then **Copy Webhook URL**. The name and picture
+you give the webhook there are what the posts show. In the game, log in as the
+admin, open the **Admin** panel and press **Set webhook** on the **Discord**
+row, paste the URL and **Save**. **Send test** posts a short message to check it
+works. To post into a thread or a forum post, add `?thread_id=<the thread's id>`
+to the end of the URL.
+
+**What is posted**, chosen on the **Post** row (lit means on):
+
+| Button | Default | Posts |
+|---|---|---|
+| Races | on | Every race, heat and feature: the finishing order with best laps and gaps, the winner, the fastest lap, the pole and the hard charger |
+| Qualifying | off | Qualifying on its own post, by best lap. The race post always names the pole |
+| Derbies | on | Each demo derby: who went out, how and when, and the winner |
+| Drag | on | Each drag tournament: the final order with records, best ET and RT, and the winner |
+| Results file | on | The full results `.txt` attached to each race, derby and drag post |
+
+A post lists the first 20 drivers; the attached file has everyone. A race
+stopped with **Restart from grid** posts nothing, and its rerun posts with both
+races in its file. Driver names cannot ping anybody: a driver called
+`@everyone` is shown as text.
+
+**Who can change it.** Setting, changing or removing the webhook, the toggles
+and **Send test** are the admin tier's. A moderator sees the row and can
+**Retry** a post that failed. The URL is typed into a password field and the
+server never sends it back: the row shows only the last four digits of the
+webhook id.
+
+**When a post fails** the admins logged in are told in chat, the row says why
+(a deleted webhook, no connection, Discord refusing it) and **Retry** sends it
+again. A post Discord asks to slow down, or that could not connect, is tried
+twice more on its own. The results file on the server is written either way.
+
+**The file.** Settings live in `Data/discord.json`, beside `config.json`, and
+can be edited by hand; a change applies to the next post:
+
+```json
+{
+  "attach": true,
+  "post": {"derby": true, "drag": true, "quali": false, "race": true},
+  "webhook": "https://discord.com/api/webhooks/<id>/<token>"
+}
+```
+
+An empty `webhook` is off. While the file does not parse nothing is posted, the
+row says so, and the panel will not write over it.
+
+**What it needs.** `curl` (part of Windows 10 1803 and later; on Linux, install
+it if `curl --version` finds nothing) and outbound HTTPS to `discord.com`. Each
+post runs curl in a process of its own, so a slow answer never holds up the
+server.
+
+**Turning it off for good.** Remove the webhook. Deleting
+`Resources/Server/RaceManager/discord.lua` also turns it off, but the next
+update puts the file back, still off until a webhook is set.
 
 ## Drag racing (parallel game mode)
 

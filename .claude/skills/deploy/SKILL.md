@@ -32,6 +32,8 @@ for f in tests/*.lua; do lua "$f" || echo "FAILED: $f"; done
   server owns** and is never touched: `layouts.json` is every track the admin
   has built, plus `cup.json`, `roster.json`, `garage.json`, `derbyArenas.json`
   and `results/`.
+- **The tracked `package/` folder is left alone.** Only `--build-only` writes
+  it, which is how a release refreshes it.
 - **Replaced files are backed up** to `_attic/deploy-<timestamp>/` on the server
   first, and every write is verified by hash afterwards.
 - **A file that is already identical is skipped**, so a deploy after a

@@ -2209,6 +2209,11 @@ var rectSeen = { width: null, length: null, rot: null, wall: null, wallDepth: nu
             $scope.prmUpdate = data.prmUpdate;
             if (data.prmUpdate.phase !== 'idle') { $scope.updateUi.confirm = false; }
           }
+          // And the Discord add-on, when the server has it.
+          if (data.prmDiscord && typeof data.prmDiscord === 'object') {
+            $scope.prmDiscord = data.prmDiscord;
+            if (!data.prmDiscord.configured) { $scope.discordUi.confirmRemove = false; }
+          }
           if ($scope.adminPresent && !$scope.isAdmin && !$scope.loginPinned) {
             $scope.showLogin = false;
           }
@@ -4273,6 +4278,66 @@ var rectSeen = { width: null, length: null, rot: null, wall: null, wallDepth: nu
         }
         // A failed look says why on its own line.
         return u.checkError ? '' : 'Not checked yet.';
+      };
+
+      // ------------------------------------------------------------------
+      // Discord (server/RaceManager/discord.lua, an optional add-on)
+      // ------------------------------------------------------------------
+      // prmDiscord rides this admin's own RaceManagerUpdate. The webhook URL
+      // goes up once and never comes back: the server sends whether one is
+      // set and the last digits of its id. Changing anything is the admin tier's.
+      $scope.prmDiscord = null;
+      $scope.discordUi = { editing: false, url: '', confirmRemove: false };
+      var DISCORD_HOOK = /^https:\/\/(discord\.com|discordapp\.com|ptb\.discord\.com|canary\.discord\.com)\/api\/(v\d+\/)?webhooks\/\d+\/[\w-]{20,100}(\?thread_id=\d+)?$/;
+      function discordSend(change) {
+        bngApi.engineLua('raceManager.discordSet(' + luaStr(JSON.stringify(change)) + ')');
+      }
+      $scope.discordUrlOk = function () {
+        return DISCORD_HOOK.test(($scope.discordUi.url || '').trim());
+      };
+      $scope.discordEdit = function () {
+        $scope.discordUi.editing = true;
+        $scope.discordUi.url = '';
+        $scope.discordUi.confirmRemove = false;
+      };
+      $scope.discordEditCancel = function () {
+        $scope.discordUi.editing = false;
+        $scope.discordUi.url = '';
+      };
+      $scope.discordSaveUrl = function () {
+        var url = ($scope.discordUi.url || '').trim();
+        if (!DISCORD_HOOK.test(url)) { return; }
+        discordSend({ webhook: url });
+        $scope.discordEditCancel();
+      };
+      $scope.discordAskRemove = function () { $scope.discordUi.confirmRemove = true; };
+      $scope.discordCancelRemove = function () { $scope.discordUi.confirmRemove = false; };
+      $scope.discordRemove = function () {
+        $scope.discordUi.confirmRemove = false;
+        discordSend({ clear: true });
+      };
+      $scope.discordOn = function (kind) {
+        var d = $scope.prmDiscord;
+        if (!d) { return false; }
+        return kind === 'attach' ? !!d.attach : !!(d.post && d.post[kind]);
+      };
+      $scope.discordToggle = function (kind) {
+        if (!$scope.prmDiscord) { return; }
+        if (kind === 'attach') { discordSend({ attach: !$scope.discordOn('attach') }); return; }
+        var post = {};
+        post[kind] = !$scope.discordOn(kind);
+        discordSend({ post: post });
+      };
+      $scope.discordTest = function () { bngApi.engineLua('raceManager.discordTest()'); };
+      $scope.discordRetry = function () { bngApi.engineLua('raceManager.discordRetry()'); };
+      $scope.discordStatusText = function () {
+        var d = $scope.prmDiscord;
+        if (!d) { return ''; }
+        if (!d.configured) { return 'Off: no webhook set, so nothing is posted.'; }
+        var s = 'Posting to webhook ' + (d.hint || '') + (d.thread ? ' (into a thread)' : '');
+        if (d.sending) { return s + '. Sending now…'; }
+        if (d.queued) { return s + '. ' + d.queued + ' waiting to send.'; }
+        return s + '.';
       };
 
       // ------------------------------------------------------------------
