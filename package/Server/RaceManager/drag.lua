@@ -1042,6 +1042,12 @@ finishTournament = function (reason)
     print('[RaceManager] Failed to write drag results: '
       .. tostring(ok and pathOrErr or wrote))
   end
+  -- The optional Discord add-on (server/RaceManager/discord.lua).
+  if race.discordPost then
+    race.discordPost('drag', { list = ladder.finishOrder, champion = ladder.champion,
+      format = drag.format, entrants = #ladder.entrants, reason = reason,
+      file = ok and wrote and pathOrErr or nil })
+  end
 end
 
 -- Every pass in the round is done. Score whatever the format scores between

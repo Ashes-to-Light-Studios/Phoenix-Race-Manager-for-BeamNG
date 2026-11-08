@@ -1117,7 +1117,7 @@ local RM_PROTOCOL = 2
 --   tools/deploy.py                      RELEASE_NAME
 --
 -- tests/wiring_test.lua fails if they disagree.
-local RM_BUILD = '0.22.0'
+local RM_BUILD = '0.23.0'
 
 -- The ghost roster on the wire: absolute END times on race.time, so a late
 -- client works out a shorter remainder, never a longer one.
@@ -1337,6 +1337,8 @@ local function broadcastState(targetPid)
     resultsPath  = selfAdmin and resultsFolderPath() or nil,
     -- Admin sends only: is a newer release out, and an update under way.
     prmUpdate    = selfAdmin and race.updateSnapshot and race.updateSnapshot(targetPid) or nil,
+    -- Admin sends only: the Discord add-on, never its webhook URL.
+    prmDiscord   = selfAdmin and race.discordSnapshot and race.discordSnapshot(targetPid) or nil,
     drivers      = buildDrivers(),
   })
   MP.TriggerClientEvent(targetPid or -1, 'RM_Update', payload)
@@ -2283,6 +2285,7 @@ local function finishSession(reason)
     broadcastState()
     MP.SendChatMessage(-1, '[RaceManager] Qualifying is over: ' .. reason .. '.')
     print('[RaceManager] Qualifying closed: ' .. reason)
+    if race.discordPost then race.discordPost('quali', { reason = reason }) end
     return
   end
 
@@ -2344,6 +2347,10 @@ local function finishSession(reason)
     print('[RaceManager] Results written to ' .. pathOrErr)
   else
     print('[RaceManager] Failed to write results: ' .. tostring(ok and pathOrErr or wrote))
+  end
+  -- Not a race stopped to be run again: the rerun posts, with both in its file.
+  if race.discordPost and not race.voided then
+    race.discordPost('race', { reason = reason, file = ok and wrote and pathOrErr or nil })
   end
 end
 
@@ -6832,6 +6839,44 @@ end)()
 end)()
 
 -- ===========================================================================
+-- DISCORD: an optional add-on, installed the way records.lua is. Off until an
+-- admin sets a webhook; without the file every race.discord* is nil.
+-- ===========================================================================
+;(function ()
+  local ok, mod = pcall(require, 'discord')
+  if not (ok and type(mod) == 'table') then
+    print('[RaceManager] discord.lua did not load, so nothing is posted to Discord: ' .. tostring(mod))
+    return
+  end
+  mod.paths.data = DATA_DIR
+  mod.init({
+    RM_BUILD = RM_BUILD, race = race, players = players,
+    requireAuth = requireAuth, requireFull = auth.requireFull, isFull = auth.isFull,
+    pushAdmins = function ()
+      for pid in pairs(authenticatedPlayers) do broadcastState(pid) end
+    end,
+    tellAdmins = function (msg)
+      for pid in pairs(authenticatedPlayers) do MP.SendChatMessage(pid, msg) end
+    end,
+    raceClassification = raceClassification, qualiClassification = qualiClassification,
+    sessionAwards = sessionAwards,
+    lapsDone = function (rec) return progress.lapsDone(rec) end,
+    raceLength = function () return raceLengthLabel(raceDistance()) end,
+    displayName = displayName, fmtLap = fmtLap, getCurrentMap = getCurrentMap,
+    mapLabel = function (map) return race.mapLabel and race.mapLabel(map) or map end,
+    jsonParse = jsonParse, jsonStringify = jsonStringify, writeFile = writeLayoutFile,
+    makeDirectory = makeDirectory, listDirectory = listDirectory,
+  })
+  race.discordSnapshot = mod.snapshot
+  race.discordWarm     = mod.warm
+  -- A Discord fault must never stop a session closing.
+  race.discordPost = function (kind, data)
+    local done, err = pcall(mod.post, kind, data)
+    if not done then print('[RaceManager] Discord post failed: ' .. tostring(err)) end
+  end
+end)()
+
+-- ===========================================================================
 -- DRIVER ROSTER (persistent display names)
 -- ===========================================================================
 -- A cup needs points to follow a driver across races and restarts. The anchor
@@ -8923,6 +8968,11 @@ function onInit()
   MP.RegisterEvent('RM_RecordsRequest',   'RM_onRecordsRequest')
   MP.RegisterEvent('RM_RecordsClear',     'RM_onRecordsClear')
   MP.RegisterEvent('RM_RecordsRemove',    'RM_onRecordsRemove')
+  -- Discord (optional add-on; see discord.lua). RM_DiscordTick is its timer.
+  MP.RegisterEvent('RM_DiscordSet',       'RM_onDiscordSet')
+  MP.RegisterEvent('RM_DiscordTest',      'RM_onDiscordTest')
+  MP.RegisterEvent('RM_DiscordRetry',     'RM_onDiscordRetry')
+  MP.RegisterEvent('RM_DiscordTick',      'RM_DiscordTick')
   -- Cup / series points (see the CUP section).
   MP.RegisterEvent('RM_CupSetEnabled',    'RM_onCupSetEnabled')
   MP.RegisterEvent('RM_CupStart',         'RM_onCupStart')
@@ -8953,6 +9003,7 @@ function onInit()
   race.dragWarm()    -- and a drag ladder left half-run when it did
   if race.mapsWarm then race.mapsWarm() end  -- and whether a map switch took
   if race.updateWarm then race.updateWarm() end  -- an update too, then ask GitHub
+  if race.discordWarm then race.discordWarm() end  -- and whether results go to Discord
   print('[RaceManager] Server plugin loaded (build ' .. RM_BUILD
     .. ', circuit edition, map: ' .. getCurrentMap() .. ')')
 end

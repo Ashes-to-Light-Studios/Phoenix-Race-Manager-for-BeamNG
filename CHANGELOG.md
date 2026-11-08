@@ -6,7 +6,7 @@ tag, the packaged zip, and the build stamp the app shows - see the note in
 
 [← Back to the README](README.md)
 
-## Unreleased - Results on Discord
+## 0.23.0 - Results on Discord
 
 #### Added
 
