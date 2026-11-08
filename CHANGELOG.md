@@ -6,6 +6,24 @@ tag, the packaged zip, and the build stamp the app shows - see the note in
 
 [← Back to the README](README.md)
 
+## Unreleased - Results on Discord
+
+#### Added
+
+- **Post results to a Discord channel.** An optional add-on: paste a channel's
+  webhook URL on the new **Discord** row of the **Admin** panel and every race,
+  heat, feature, demo derby and drag tournament posts its results there as it
+  closes. Each post has the finishing order (first 20 drivers), the winner,
+  fastest lap, pole and hard charger, and the full results file attached.
+  Qualifying can post on its own too (off by default). The **Post** row picks
+  what goes; **Send test** checks the webhook. A failed post tells the admins
+  in chat and offers **Retry**; one that could not connect, or that Discord
+  asked to wait, is tried twice more on its own. Driver names cannot ping the
+  channel. The URL stays on the server: the panel shows the last digits of the
+  webhook id. Setting it up is the admin tier's; a moderator can retry.
+  Settings are in `Data/discord.json`. Needs `curl`. Off until a webhook is
+  set, and the server never contacts Discord until then.
+
 ## 0.22.0 - One-file installers, and updates from the Admin tab
 
 #### Added

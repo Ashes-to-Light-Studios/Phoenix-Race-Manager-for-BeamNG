@@ -3348,6 +3348,65 @@
       </span>
       <span class="rm-layouts-hint" ng-if="prmUpdate.url">Release page: {{ prmUpdate.url }}</span>
     </div>
+
+    <!-- DISCORD. An optional add-on (server/RaceManager/discord.lua): no row
+         on a server without it. The URL is typed into a password field and
+         never sent back, so a streamed panel does not leak it. -->
+    <div class="rm-adminbar rm-discord" ng-if="isAdmin && prmDiscord">
+      <span class="rm-adminbar-label">Discord</span>
+      <span class="rm-layouts-hint">{{ discordStatusText() }}</span>
+      <button class="rm-btn rm-btn-mini" ng-class="{'rm-btn-start': !prmDiscord.configured}"
+              ng-if="prmDiscord.canEdit && !discordUi.editing && !discordUi.confirmRemove"
+              ng-click="discordEdit()"
+              title="Paste a channel's webhook URL. Results are posted there as each session closes.">{{ prmDiscord.configured ? 'Change webhook' : 'Set webhook' }}</button>
+      <span class="rm-confirm" ng-if="discordUi.editing">
+        <input type="password" class="rm-login-input rm-discord-url" maxlength="300"
+               placeholder="https://discord.com/api/webhooks/..." ng-model="discordUi.url"
+               ng-keydown="$event.keyCode === 13 && discordUrlOk() && discordSaveUrl()">
+        <button class="rm-btn rm-btn-mini rm-btn-start" ng-disabled="!discordUrlOk()"
+                ng-click="discordSaveUrl()">Save</button>
+        <button class="rm-btn rm-btn-mini" ng-click="discordEditCancel()">Cancel</button>
+      </span>
+      <button class="rm-btn rm-btn-mini rm-btn-reset"
+              ng-if="prmDiscord.canEdit && prmDiscord.configured && !discordUi.editing && !discordUi.confirmRemove"
+              ng-click="discordAskRemove()" title="Stop posting to Discord">Remove</button>
+      <span class="rm-confirm" ng-if="discordUi.confirmRemove">
+        Stop posting to Discord?
+        <button class="rm-btn rm-btn-mini rm-btn-end" ng-click="discordRemove()">Yes, remove it</button>
+        <button class="rm-btn rm-btn-mini" ng-click="discordCancelRemove()">Cancel</button>
+      </span>
+      <button class="rm-btn rm-btn-mini"
+              ng-if="prmDiscord.canEdit && prmDiscord.configured && !discordUi.editing && !discordUi.confirmRemove"
+              ng-click="discordTest()" title="Post a short message to check the webhook works">Send test</button>
+      <button class="rm-btn rm-btn-mini rm-btn-start" ng-if="prmDiscord.canRetry && prmDiscord.configured"
+              ng-click="discordRetry()" title="Send the post that failed again">Retry</button>
+      <span class="rm-maps-error" ng-if="prmDiscord.error">{{ prmDiscord.error }}</span>
+      <span class="rm-maps-error" ng-if="prmDiscord.last && !prmDiscord.last.ok">
+        The {{ prmDiscord.last.what }} did not post: {{ prmDiscord.last.error }}.
+      </span>
+      <span class="rm-layouts-hint" ng-if="prmDiscord.last && prmDiscord.last.ok">
+        Last post: {{ prmDiscord.last.what }}, {{ updateWhen(prmDiscord.last.at) }}.
+      </span>
+    </div>
+    <div class="rm-adminbar" ng-if="isAdmin && prmDiscord && prmDiscord.configured">
+      <span class="rm-adminbar-label">Post</span>
+      <button class="rm-btn rm-btn-mini" ng-class="{'rm-btn-start': discordOn('race')}"
+              ng-disabled="!prmDiscord.canEdit" ng-click="discordToggle('race')"
+              title="Every race, heat and feature">Races</button>
+      <button class="rm-btn rm-btn-mini" ng-class="{'rm-btn-start': discordOn('quali')}"
+              ng-disabled="!prmDiscord.canEdit" ng-click="discordToggle('quali')"
+              title="Qualifying on its own post. The race post always names the pole.">Qualifying</button>
+      <button class="rm-btn rm-btn-mini" ng-class="{'rm-btn-start': discordOn('derby')}"
+              ng-disabled="!prmDiscord.canEdit" ng-click="discordToggle('derby')">Derbies</button>
+      <button class="rm-btn rm-btn-mini" ng-class="{'rm-btn-start': discordOn('drag')}"
+              ng-disabled="!prmDiscord.canEdit" ng-click="discordToggle('drag')">Drag</button>
+      <button class="rm-btn rm-btn-mini" ng-class="{'rm-btn-start': discordOn('attach')}"
+              ng-disabled="!prmDiscord.canEdit" ng-click="discordToggle('attach')"
+              title="Attach the full results file to each post">Results file</button>
+      <span class="rm-layouts-hint">
+        Lit means posted. In Discord: Edit Channel, Integrations, Webhooks, Copy Webhook URL.
+      </span>
+    </div>
     <div class="rm-adminbar">
       <span class="rm-adminbar-label">Results</span>
       <!-- Two presses. The file this deletes is the only record a league has of
@@ -6415,6 +6474,7 @@
   }
   .rm-records-date { width: 66px; text-align: right; color: var(--rm-muted, #9aa0a6); font-size: 10px; }
   .rm-maps-percent { width: 52px; }
+  .rm-discord-url { width: 240px; }
   .rm-garage-pickrow {
     display: flex;
     align-items: center;

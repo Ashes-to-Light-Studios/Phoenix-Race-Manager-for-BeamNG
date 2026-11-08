@@ -5789,6 +5789,21 @@ function M.updateCancel()
   if inMultiplayer() then TriggerServerEvent('RM_UpdateCancel', '') end
 end
 
+-- The Discord add-on (server/RaceManager/discord.lua), the same way: its state
+-- is prmDiscord on this admin's RM_Update. The server checks every field.
+function M.discordSet(json)
+  if type(json) ~= 'string' or json == '' or #json > 2000 or not inMultiplayer() then return end
+  TriggerServerEvent('RM_DiscordSet', json)
+end
+
+function M.discordTest()
+  if inMultiplayer() then TriggerServerEvent('RM_DiscordTest', '') end
+end
+
+function M.discordRetry()
+  if inMultiplayer() then TriggerServerEvent('RM_DiscordRetry', '') end
+end
+
 -- Lap records, the same way. onRecords is the RM_Records handler.
 do
   local records = require('raceManager/records')

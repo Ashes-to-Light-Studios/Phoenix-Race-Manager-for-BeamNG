@@ -44,6 +44,7 @@ one so the headless tests exercise the real file format).
 | `mapSwitch.json` | A map switch waiting for its restart, so the next boot can say whether it took | The next boot |
 | `mapNames.json` | Display names for maps, by level name | Renaming each map back |
 | `update/last.json` | The last in-game update: from, to, when, by whom, and the `_attic` folder holding the old files | The next update |
+| `discord.json` | The Discord webhook and which results it posts | Removing the webhook |
 | `Lap Records/<map>.json` | Each driver's best lap per saved layout on that map | Clear Board, or deleting the file |
 
 `roster.json` and `cup.json` are deliberately **not** under `results/`: Clear
@@ -52,16 +53,16 @@ routine housekeeping can destroy is not persistent in any sense that matters.
 
 ## Modules inside the server plugin
 
-Seven parts of the plugin are self-contained: **Demo Derby**, **drag racing**,
-**map switching**, **lap records**, **updates**, the **driver roster** and the
-**cup**. Each has its own state tables, its own `RM_*` event namespace and its
-own broadcast channel, and none of them is reachable from the racing state
-machine except through a handful of named functions declared at the top of the
-file.
+Eight parts of the plugin are self-contained: **Demo Derby**, **drag racing**,
+**map switching**, **lap records**, **updates**, **Discord**, the **driver
+roster** and the **cup**. Each has its own state tables, its own `RM_*` event
+namespace and its own broadcast channel, and none of them is reachable from the
+racing state machine except through a handful of named functions declared at
+the top of the file.
 
-The first five are separate FILES (`derby.lua`, `drag.lua`, `maps.lua`,
-`records.lua`, `update.lua`) required as siblings; the other two are
-`do ... end` blocks inside `main.lua`.
+The first six are separate FILES (`derby.lua`, `drag.lua`, `maps.lua`,
+`records.lua`, `update.lua`, `discord.lua`) required as siblings; the other two
+are `do ... end` blocks inside `main.lua`.
 Same isolation either way, reached two different ways for the same reason:
 Lua's 200-local ceiling.
 
@@ -107,6 +108,17 @@ script with the package appended as a base64 tarball, because tar and base64
 are on every Linux and unzip is not. Each has a test (`test.ps1`, `test.sh`)
 that the package workflow runs against scratch server folders before anything
 is published.
+
+**Discord is an add-on: nothing depends on it.** `main.lua` loads it with
+`pcall` and every call site checks `race.discordPost` first, so a missing or
+broken `discord.lua` costs the posts and nothing else. It is a consumer of
+results too: `finishSession`, `finishDerby` and the drag ladder's
+`finishTournament` each hand it one snapshot as the session closes, and the
+post is sent from its own 1 second tick by curl in a process of its own, the
+way `update.lua` downloads. Two rules hold it together: the webhook URL never
+leaves the server (the panel gets the last digits of its id, and curl reads it
+from a config file, not its command line), and only a URL rebuilt from checked
+parts is stored, so nothing an admin types reaches a shell.
 
 **Lap records are a consumer of results, like the cup.** `finishSession` calls
 them once per session through `race.recordsSession`, after the joker ruling.

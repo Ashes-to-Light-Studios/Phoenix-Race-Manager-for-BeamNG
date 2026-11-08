@@ -49,6 +49,7 @@ local FILES = {
   'server/RaceManager/maps.lua',
   'server/RaceManager/records.lua',
   'server/RaceManager/update.lua',
+  'server/RaceManager/discord.lua',
 }
 
 -- Each host file, and the modules split out of it. Used by the orphan check
@@ -73,6 +74,7 @@ local HOSTS = {
       'server/RaceManager/maps.lua',
       'server/RaceManager/records.lua',
       'server/RaceManager/update.lua',
+      'server/RaceManager/discord.lua',
     } },
 }
 
