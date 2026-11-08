@@ -104,14 +104,17 @@ def sha_file(path):
         return sha(f.read())
 
 
-def build(write=True):
-    """Build the client zip in memory, then dist/ and package/ from it.
+def build(write=True, package=False):
+    """Build the client zip in memory, then dist/ from it, and package/ if asked.
 
     `write=False` builds and reports without touching the working tree, which
     is what --dry-run needs. It used to build unconditionally, so a dry run
     quietly rewrote dist/ and package/ while printing "nothing written" -- and
     since package/ is version-controlled build output, a throwaway file dropped
     in server/RaceManager to test module discovery ended up committed.
+
+    `package=True` is --build-only, for a release. A plain deploy leaves
+    package/ alone, or every test build lands in the next commit.
     """
     files = client_files()
     if not os.path.exists(SERVER_PLUGIN):
@@ -126,19 +129,18 @@ def build(write=True):
             z.write(f, f)
     client = buf.getvalue()
 
-    os.makedirs('package/Client', exist_ok=True)
-    os.makedirs('package/Server/RaceManager', exist_ok=True)
     server_lua = server_files()
     os.makedirs('dist', exist_ok=True)
     release = os.path.join('dist', RELEASE_NAME)
-    if write:
+    if write and package:
         os.makedirs('package/Client', exist_ok=True)
         os.makedirs('package/Server/RaceManager', exist_ok=True)
-        os.makedirs('dist', exist_ok=True)
         with open('package/Client/RaceManager.zip', 'wb') as f:
             f.write(client)
         for f in server_lua:
             shutil.copyfile(f, 'package/Server/RaceManager/' + os.path.basename(f))
+    if write:
+        os.makedirs('dist', exist_ok=True)
         with zipfile.ZipFile(release, 'w', zipfile.ZIP_DEFLATED) as z:
             z.write('LICENSE', 'LICENSE')
             z.writestr('Client/RaceManager.zip', client)
@@ -337,7 +339,7 @@ def main():
     if not os.path.exists(SERVER_PLUGIN):
         raise SystemExit('run this from the repo root')
 
-    client = build(write=not args.dry_run)
+    client = build(write=not args.dry_run, package=args.build_only)
     if args.build_only:
         return 0
 
