@@ -2757,8 +2757,8 @@ M.RESULTS_LOCAL_DIR = 'settings/raceManager/results'
 -- bigger is not a results file and does not reach the disk.
 M.RESULTS_LOCAL_MAX = 65536
 
--- A copy of the results for an admin who is not the server owner. The server's
--- copy stays the record.
+-- A copy of the results for an admin who is not the server owner, sent while
+-- the server's Save results is on for admins' PCs.
 function M.onResultsFile(rawData)
   local ok, data = pcall(jsonDecode, rawData)
   if not ok or type(data) ~= 'table' then return end
@@ -2766,7 +2766,7 @@ function M.onResultsFile(rawData)
   if text == '' then return end
   if #text > M.RESULTS_LOCAL_MAX then
     log('W', 'raceManager', 'Results copy refused: ' .. #text .. ' bytes')
-    pushNotice('session', 'Results too large to copy: the server copy is complete')
+    pushNotice('session', 'Results too large to copy to this PC')
     return
   end
   -- ONLY THE SHAPE THE SERVER WRITES, else a name of our own. This is the folder
@@ -2792,7 +2792,7 @@ function M.onResultsFile(rawData)
   end
   if not wrote then
     log('W', 'raceManager', 'Could not write a local results copy to ' .. path)
-    pushNotice('session', 'Could not save your results copy: the server copy is complete')
+    pushNotice('session', 'Could not save your results copy on this PC')
     return
   end
   log('I', 'raceManager', 'Results saved locally: ' .. path .. ' (' .. #text .. ' bytes)')
@@ -8883,6 +8883,16 @@ end
 -- Delete the server's saved result files.
 function M.clearResults()
   if inMultiplayer() then TriggerServerEvent('RM_ClearResults', '') end
+end
+
+-- Save results: where a closing session's results go, 'server' (the server's
+-- results folder) or 'admins' (a copy on each logged-in admin's PC). The
+-- server checks the tier; its answer comes back as resultsSave on RM_Update.
+function M.setResultsSave(which, on)
+  if (which ~= 'server' and which ~= 'admins') or type(on) ~= 'boolean' then return end
+  if inMultiplayer() then
+    TriggerServerEvent('RM_SetResultsSave', jsonEncode({ [which] = on }))
+  end
 end
 
 -- ---------------------------------------------------------------------------

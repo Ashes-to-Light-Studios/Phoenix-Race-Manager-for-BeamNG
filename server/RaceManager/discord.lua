@@ -262,12 +262,14 @@ local function where(name)
   return name and ('**' .. md(name, 60) .. '** on ' .. md(map, 60)) or ('On ' .. md(map, 60))
 end
 
--- The rows past M.ROWS are in the file, attached or on the server.
-local function more(rows, file)
+-- The rows past M.ROWS are in the results file: attached to the post, saved
+-- on the server, or neither (the admin panel's Save results row is off).
+local function more(rows, data)
   local extra = #rows - M.ROWS
   if extra <= 0 then return nil end
-  return string.format('and %d more in the results %s', extra,
-    file and 'file attached' or 'file on the server')
+  local where = data.attached and ' in the results file attached'
+    or data.file and ' in the results file on the server' or ''
+  return string.format('and %d more%s', extra, where)
 end
 
 local function sessionTitle(base)
@@ -317,7 +319,7 @@ function M.build.race(data)
   local lines = { string.format('%s \u{00B7} %s \u{00B7} %d driver%s', where(trackName()),
     host.raceLength(), #final, #final == 1 and '' or 's') }
   lines[#lines + 1] = grid({ 'Pos', 'Driver', 'Best', 'Time' }, rows, { 4, 18, 9, 10 })
-  lines[#lines + 1] = more(rows, data.file)
+  lines[#lines + 1] = more(rows, data)
 
   local fields = {}
   local awards = host.sessionAwards(final)
@@ -359,7 +361,7 @@ function M.build.quali(data)
   local lines = { string.format('%s \u{00B7} %d driver%s', where(trackName()),
     #rows, #rows == 1 and '' or 's') }
   lines[#lines + 1] = grid({ 'Pos', 'Driver', 'Best', 'Laps' }, rows, { 4, 18, 9, 4 })
-  lines[#lines + 1] = more(rows, nil)
+  lines[#lines + 1] = more(rows, {})
   local fields = {}
   addField(fields, 'Pole', pole and (md(host.displayName(pole), 40) .. ' ' .. lap(pole.qualiBest)))
   return { what = 'qualifying results',
@@ -385,7 +387,7 @@ function M.build.derby(data)
     where(type(data.arena) == 'string' and data.arena or nil), mmss(data.duration),
     #list, #list == 1 and '' or 's') }
   lines[#lines + 1] = grid({ 'Pos', 'Driver', 'Result', 'Out at' }, rows, { 4, 18, 16, 8 })
-  lines[#lines + 1] = more(rows, data.file)
+  lines[#lines + 1] = more(rows, data)
   local fields = {}
   addField(fields, 'Winner', type(data.winner) == 'string' and md(data.winner, 40) or nil)
   return { what = 'derby results', file = data.file,
@@ -408,7 +410,7 @@ function M.build.drag(data)
     (tonumber(data.entrants) or #list) == 1 and '' or 's') }
   lines[#lines + 1] = grid({ 'Pos', 'Driver', 'W-L', 'Best ET', 'Best RT' }, rows,
     { 4, 18, 5, 8, 7 })
-  lines[#lines + 1] = more(rows, data.file)
+  lines[#lines + 1] = more(rows, data)
   local fields = {}
   addField(fields, 'Winner', type(data.champion) == 'string' and md(data.champion, 40) or nil)
   return { what = 'drag results', file = data.file,
@@ -429,19 +431,26 @@ function M.build.test(data)
       and ('Sent by ' .. data.who) or nil) }
 end
 
--- The attachment, read now: a rerun appends to the same file later.
-local function attachment(path)
-  if type(path) ~= 'string' then return nil end
-  local data = readFile(path)
-  if not data or data == '' then return nil end
-  if #data > M.MAX_ATTACH then
-    print('[RaceManager] Discord: ' .. path .. ' is too large to attach, so the post goes without it')
+-- The attachment, taken now: a rerun appends to the same file later. The
+-- session hands over its text (`results`), which need not be on the server's
+-- disk at all: saving there is the admin panel's choice. Else the file is read.
+local function attachment(data)
+  local name, text
+  if type(data.results) == 'table' and type(data.results.text) == 'string' then
+    name, text = data.results.name, data.results.text
+  elseif type(data.file) == 'string' then
+    name, text = data.file, readFile(data.file)
+  end
+  if not text or text == '' then return nil end
+  name = type(name) == 'string' and name or 'results.txt'
+  if #text > M.MAX_ATTACH then
+    print('[RaceManager] Discord: ' .. name .. ' is too large to attach, so the post goes without it')
     return nil
   end
-  local name = (path:gsub(string.char(92), '/'):match('([^/]+)$') or 'results.txt')
+  name = (name:gsub(string.char(92), '/'):match('([^/]+)$') or 'results.txt')
     :gsub('[^%w%-_%.]', '_')
   if not name:match('%.txt$') then name = name .. '.txt' end
-  return { name = name, data = data }
+  return { name = name, data = text }
 end
 
 local function payload(built, file)
@@ -712,9 +721,11 @@ end
 function M.post(kind, data)
   local cfg = M.config()
   if not cfg.webhook or not cfg.post[kind] then return false end
-  local built = M.build[kind](data or {})
+  data = data or {}
+  local file = cfg.attach and attachment(data) or nil
+  data.attached = file ~= nil
+  local built = M.build[kind](data)
   if not built then return false end
-  local file = cfg.attach and attachment(built.file) or nil
   return M.enqueue({ kind = kind, what = built.what, file = file, body = payload(built, file) })
 end
 

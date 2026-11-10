@@ -117,8 +117,10 @@ they are performing.
 | **Clear Results Cache** (the server's files) | ✅ | ❌ |
 | **Delete** a track layout, derby arena or garage set | ✅ | ❌ |
 | **Clear** a lap records board, or take a time off it | ✅ | ❌ |
+| Choose where results are saved (**Save results**) | ✅ | ❌ |
 
-The four an admin keeps are the four that **cannot be undone**. A moderator
+The first four an admin keeps are the four that **cannot be undone**, and the
+last decides whether a night is on record at all. A moderator
 who presses one anyway is refused by the server, told why, and **stays logged
 in** - a refusal on the tier is not a refusal on the login.
 
@@ -677,10 +679,11 @@ the stragglers are taken where they stand and the session closes normally.
 
 ### Step 7 - Results
 
-When the race closes, the server automatically writes a results file
-(qualifying classification + race classification, pole and winner tagged) to
-`Resources/Server/RaceManager/results/` and announces the path in chat
-ready for league standings or a broadcast overlay.
+When the race closes, the server builds a results file (qualifying
+classification + race classification, pole and winner tagged), ready for league
+standings or a broadcast overlay. Where it is kept is the admin's choice: see
+[Where results go](#where-results-go). **As shipped it is kept nowhere**, so
+turn on **Save results** before the first race you want to keep.
 
 The race table records **Pos, Start, Driver, Best Lap, Laps Led, Laps, Race
 Time** (a formation lap is never a lap led) (plus Joker and Resets columns when those regulations are armed). `Start`
@@ -698,8 +701,9 @@ adds `laps run` only when it was stopped short of its distance. An `Ended:` line
 says how the session closed (`all drivers finished`, `ended by <admin>`, `the
 finish countdown ran out`, `Restarted from the grid by <admin>`).
 
-**Every race that was run gets a file.** Reset during a race ends and saves it
-first, and a cup that fails to score cannot stop the file being written.
+**Every race that was run gets a file**, kept wherever Save results says.
+Reset during a race ends and saves it first, and a cup that fails to score
+cannot stop the file being written.
 
 #### Restart from grid
 
@@ -711,7 +715,10 @@ and runs it again without losing qualifying:
 - The field goes straight back to the **same grid**, slot for slot, and
   qualifying times are kept. Start Countdown when everyone is ready.
 - The rerun's results are **added to the same file** under a `RESTART` banner,
-  so the two read as one event and nothing goes missing between them.
+  so the two read as one event and nothing goes missing between them. On the
+  server the rerun is added to the stopped race's file (or both are written to a
+  new one if that file was deleted in between), and an admin's copy of the
+  stopped race is replaced by one holding both.
 - In the countdown, before anything has been raced, it just goes back to the
   grid and saves nothing.
 
@@ -755,12 +762,37 @@ the fewest.
 **If a cup is running**, the file ends with the championship round this race
 just banked - see [Cup points in the results file](#cup-points-in-the-results-file).
 
-**Your own copy.** When a race closes, every logged-in admin and moderator is
-sent its results file, saved in `settings/raceManager/results/` in the BeamNG
-user folder (**My Results** opens it). It keeps the server's file name,
-`results_<date>_<time>.txt`, and nothing else: any other name is replaced by a
-dated one, so nothing but a results file lands in that folder. A file over
-60 KB is not sent, and chat says so; the server's copy is complete.
+#### Where results go
+
+The **Save results** row on the **Admin** panel has two switches, lit when on.
+They apply to every race, heat, feature, demo derby and drag tournament as it
+closes:
+
+| Switch | Default | Keeps |
+|---|---|---|
+| **On the server** | off | A file in `Resources/Server/RaceManager/Data/results/`, named `results_<date>_<time>.txt` (`derby_results_…`, `drag_results_…`). Chat announces the path |
+| **On admins' PCs** | off | A copy to every admin and moderator logged in, saved in `settings/raceManager/results/` in their BeamNG user folder. **My Results** opens it |
+
+[Posting to Discord](#posting-results-to-discord) is its own row, and attaches
+the results file whether or not either switch is on.
+
+**Both are off until an admin turns them on**, so each server keeps what it
+wants where it wants it. A session whose results went nowhere (both switches
+off and nothing posted to Discord) still closes as normal, and every admin
+logged in is told so in chat: those results are gone once the next session
+starts.
+
+Only the admin tier can change them; a moderator sees the row and is refused.
+They are saved in `config.json` as `saveResultsOnServer` and
+`copyResultsToAdmins`, so they survive a restart and can be set there by hand.
+
+**An admin's copy** keeps the server's file name and nothing else: any other
+name is replaced by a dated one, so nothing but a results file lands in that
+folder. A file over 60 KB is not sent, and chat says so.
+
+> **Upgrading from 0.23.0 or earlier?** Those versions saved every race's
+> results in both places, always. After the update both switches are off: turn
+> on the ones you want.
 
 Housekeeping:
 
@@ -1536,7 +1568,7 @@ Resources/Server/RaceManager/
         cup.json                 the championship
         roster.json              display names
         garage.json              the allowed vehicles
-        results/                 one .txt per session
+        results/                 one .txt per session, while Save results is on the server
         mapSwitch.json           a map switch waiting for its restart; gone after it
 ```
 
@@ -3274,7 +3306,7 @@ to the end of the URL.
 | Qualifying | off | Qualifying on its own post, by best lap. The race post always names the pole |
 | Derbies | on | Each demo derby: who went out, how and when, and the winner |
 | Drag | on | Each drag tournament: the final order with records, best ET and RT, and the winner |
-| Results file | on | The full results `.txt` attached to each race, derby and drag post |
+| Results file | on | The full results `.txt` attached to each race, derby and drag post, whether or not [Save results](#where-results-go) keeps it anywhere else |
 
 A post lists the first 20 drivers; the attached file has everyone. A race
 stopped with **Restart from grid** posts nothing, and its rerun posts with both
@@ -3290,7 +3322,8 @@ webhook id.
 **When a post fails** the admins logged in are told in chat, the row says why
 (a deleted webhook, no connection, Discord refusing it) and **Retry** sends it
 again. A post Discord asks to slow down, or that could not connect, is tried
-twice more on its own. The results file on the server is written either way.
+twice more on its own. Saving on the server and on admins' PCs is set on its
+own row, [Save results](#where-results-go), and happens either way.
 
 **The file.** Settings live in `Data/discord.json`, beside `config.json`, and
 can be edited by hand; a change applies to the next post:
@@ -3526,9 +3559,9 @@ an identity here; no championship points hang on it (see *Display names*).
 
 ### Results
 
-When a tournament finishes the server announces the winner in chat and writes
-`drag_results_YYYY-MM-DD_HH-MM-SS.txt` to
-`Resources/Server/RaceManager/Data/results/`: the rules it ran under, the
+When a tournament finishes the server announces the winner in chat and builds
+`drag_results_YYYY-MM-DD_HH-MM-SS.txt`, kept wherever
+[Save results](#where-results-go) says: the rules it ran under, the
 finishing order for the whole field with each driver's best numbers, then the
 whole ladder round by round with every lane's run and every red light.
 
@@ -3784,8 +3817,8 @@ derby mode, and derby controls are not shown anywhere else - see
    elimination time) and the winner - under their **display name** if an admin
    set one (see *Display names* above), in both the standings and the exported
    results. When exactly one driver remains the
-   server ends the derby, announces the **winner** in chat, and writes
-   `derby_results_YYYY-MM-DD_HH-MM-SS.txt` to
-   `Resources/Server/RaceManager/results/` (winner first, then everyone else
-   in reverse elimination order). **End Derby** force-ends a running derby;
+   server ends the derby, announces the **winner** in chat, and builds
+   `derby_results_YYYY-MM-DD_HH-MM-SS.txt` (winner first, then everyone else
+   in reverse elimination order), kept wherever
+   [Save results](#where-results-go) says. **End Derby** force-ends a running derby;
    pressing it again after the finish resets the mode for the next round.

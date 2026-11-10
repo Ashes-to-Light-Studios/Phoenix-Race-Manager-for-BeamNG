@@ -69,6 +69,8 @@ local function near(a, b, tol) return a and math.abs(a - b) <= (tol or 0.5) end
 
 onInit()
 RM_onLogin(0, '{"password":"phoenix"}'); RM_onSetReadyCheck(0, '{"on":false}')
+-- Results are saved nowhere as shipped; this suite reads the server's file.
+RM_onSetResultsSave(0, '{"server":true}')
 for pid in pairs(connected) do RM_onPlayerJoin(pid) end
 RM_onSetSpectating(0, '{"spectating":true}')
 

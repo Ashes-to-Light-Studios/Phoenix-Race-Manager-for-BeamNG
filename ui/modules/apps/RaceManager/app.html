@@ -3407,6 +3407,21 @@
         Lit means posted. In Discord: Edit Channel, Integrations, Webhooks, Copy Webhook URL.
       </span>
     </div>
+    <!-- SAVE RESULTS: where a closing session's results go. Both off as
+         shipped, so an admin chooses; Discord is its own row above. Admin tier
+         only, as Clear Results Cache is. No row on an older server, which
+         always saved both. -->
+    <div class="rm-adminbar" ng-if="isAdmin && resultsSave">
+      <span class="rm-adminbar-label">Save results</span>
+      <button class="rm-btn rm-btn-mini" ng-class="{'rm-btn-start': resultsSave.server}"
+              ng-disabled="!isFullAdmin()" ng-click="toggleResultsSave('server')"
+              title="Write a results file into the server's results folder as each race, derby and drag tournament closes">On the server</button>
+      <button class="rm-btn rm-btn-mini" ng-class="{'rm-btn-start': resultsSave.admins}"
+              ng-disabled="!isFullAdmin()" ng-click="toggleResultsSave('admins')"
+              title="Send a copy to every admin and moderator logged in, saved on their own PC (My Results opens it)">On admins' PCs</button>
+      <span class="rm-layouts-hint">{{ resultsSaveText() }}</span>
+      <span class="rm-layouts-hint" ng-if="!isFullAdmin()">Changing this needs the admin password.</span>
+    </div>
     <div class="rm-adminbar">
       <span class="rm-adminbar-label">Results</span>
       <!-- Two presses. The file this deletes is the only record a league has of
@@ -3433,7 +3448,7 @@
            reported as a path. -->
       <button class="rm-btn rm-btn-mini" ng-if="!resultsUi.confirmClear && !resultsUi.confirmLocal"
               ng-click="openLocalResults()"
-              title="Open your own copies of the results, saved on this PC when a session closes. Written for whoever is logged in as an admin, so a race admin without server access still gets the file.">My Results</button>
+              title="Open your own copies of the results, saved on this PC when a session closes while Save results is on for admins' PCs. A race admin without server access still gets the file.">My Results</button>
       <!-- YOUR PC, NOT THE SERVER, and that is why it is not admin-only. The
            server's copy is the league's record and this never touches it, so a
            race director can tidy their own folder after an evening without
@@ -3445,7 +3460,7 @@
               ng-click="askClearLocal()"
               title="Delete the copies of the results saved on THIS PC. The server's own files are untouched.">Clear My Results</button>
       <span class="rm-confirm" ng-if="resultsUi.confirmLocal">
-        Delete your own copies on this PC? The server keeps its own.
+        Delete your own copies on this PC? The server's files are untouched.
         <button class="rm-btn rm-btn-mini rm-btn-end" ng-click="clearLocalResults()">Yes, clear mine</button>
         <button class="rm-btn rm-btn-mini" ng-click="cancelClearLocal()">Cancel</button>
       </span>
@@ -3453,9 +3468,8 @@
               ng-click="openResults()"
               title="Show the full path to the server's results folder, to paste into a file manager. BeamNG cannot open a folder outside its own files, so this reports the path rather than opening it.">Server Path</button>
       <span class="rm-layouts-hint">
-        Result files are written automatically when a session closes. Clear
-        Results Cache deletes the server's; Clear My Results deletes only the
-        copies on this PC.
+        Clear Results Cache deletes the files saved on the server; Clear My
+        Results deletes only the copies on this PC.
       </span>
     </div>
     <div class="rm-adminbar">

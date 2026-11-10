@@ -244,6 +244,8 @@ check(targetedState(1) ~= nil, 'and sends that admin their own targeted state')
 check(targetedState(1).youAreAdmin == true,
   'which is what carries the per-player fields, youAreAdmin among them')
 adminLogin(2)
+-- Results are saved nowhere as shipped; this suite reads the server's file.
+RM_onSetResultsSave(1, '{"server":true}')
 
 -- Change the master password (authed admin only) to an arbitrary value: the old
 -- password then fails and the new one works. pid 7 probes the change.
@@ -397,7 +399,8 @@ RM_onLap(2, '{"lapTime":50}')
 check(driver('Bob').finishTime == before, 'post-finish lap report ignored')
 
 -- Alice disconnects mid-race -> DNF; she was the last active racer, so the
--- race closes and the results file is written automatically.
+-- race closes and the results file is written (Save results is on the server,
+-- turned on at login above).
 lastChat = nil
 RM_onPlayerDisconnect(1)
 check(driver('Alice').status == 'dnf', 'disconnect mid-race is DNF')

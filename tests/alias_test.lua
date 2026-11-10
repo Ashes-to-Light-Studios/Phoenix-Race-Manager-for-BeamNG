@@ -81,6 +81,8 @@ onInit()
 -- The ready check is off after every admin login here: this suite pins the
 -- race engine behind it. tests/ready_test.lua covers calling the grid.
 RM_onLogin(1, '{"password":"phoenix"}'); RM_onSetReadyCheck(1, '{"on":false}')
+-- Results are saved nowhere as shipped; this suite reads the server's file.
+RM_onSetResultsSave(1, '{"server":true}')
 for id in pairs(connected) do RM_onPlayerJoin(id) end
 
 -- ---------------------------------------------------------------------------
