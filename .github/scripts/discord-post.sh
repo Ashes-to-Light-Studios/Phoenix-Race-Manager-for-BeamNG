@@ -31,6 +31,7 @@ set -euo pipefail
 # match, or Discord keeps showing the copy it already fetched.
 IDENTITIES='
 JHaseldenDev|JraySunshine|https://raw.githubusercontent.com/Ashes-to-Light-Studios/Phoenix-Race-Manager-for-BeamNG/main/.github/discord/sun.png
+aosjay31|Ashes to Light Studios|https://raw.githubusercontent.com/Ashes-to-Light-Studios/Phoenix-Race-Manager-for-BeamNG/main/.github/discord/ashes-to-light.png
 '
 
 event="${1:?usage: discord-post.sh <event name> <event payload file>}"
