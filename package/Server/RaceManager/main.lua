@@ -108,6 +108,13 @@ local CFG = {
   -- presses Ready to be placed. false places everyone at once (pre-0.17.2).
   readyCheck      = true,
 
+  -- WHERE RESULTS GO as a race, derby or drag tournament closes: a file in the
+  -- server's results folder, and a copy to the PC of every admin logged in. Both
+  -- OFF as shipped, so an admin chooses (the Admin panel's Save results row).
+  -- Discord is its own setting, in Data/discord.json.
+  saveResultsOnServer = false,
+  copyResultsToAdmins = false,
+
   -- Map switching and voting. See maps.lua.
   mapRestart      = 'auto',  -- auto | watch | relaunch | exit | manual
   mapRestartGrace = 90,      -- seconds to wait for an outside restart (watch)
@@ -116,7 +123,7 @@ local CFG = {
 
   -- Updates from GitHub. See update.lua. false never contacts GitHub at all.
   updateCheck     = true,
-  updateRepo      = 'aosjay13/BeamNG-Race-Manager-by-Phoenix',  -- owner/name
+  updateRepo      = 'Ashes-to-Light-Studios/Phoenix-Race-Manager-for-BeamNG',  -- owner/name
 }
 -- Forward declarations: the layout store's validators are needed by the grid
 -- hold code above them.
@@ -255,9 +262,10 @@ local race = {
   -- Counts every classification, so finishes on one tick keep arrival order.
   finishSeq    = 0,
   -- RESTART FROM THE GRID (RM_onRestartFromGrid). `voided` says why the race
-  -- being closed does not count (no cup round); `lastResults` is the file the
-  -- last session wrote; `appendTo` is where the rerun's results go, so the
-  -- stopped race and its rerun are one file. `regrid` lines the grid up as the
+  -- being closed does not count (no cup round); `lastResults` is what the last
+  -- session's results became ({ name, text, path }: resultsOut.save); `appendTo` is
+  -- the stopped race the rerun's results go under, so the stopped race and its
+  -- rerun are one file wherever they are kept. `regrid` lines the grid up as the
   -- stopped race did. `closedHow` is the results header's Ended line.
   voided       = nil,
   lastResults  = nil,
@@ -427,7 +435,8 @@ function auth.requireFull(pid)
     .. (MP.GetPlayerName(pid) or tostring(pid)))
   MP.TriggerClientEvent(pid, 'RM_Denied', Util.JsonEncode({
     reason = 'That needs the admin password: a moderator cannot change '
-      .. 'passwords, clear the results or lap records, or delete a layout.',
+      .. 'passwords, choose where results are saved, clear the results or lap '
+      .. 'records, or delete a layout.',
   }))
   return false
 end
@@ -1117,7 +1126,7 @@ local RM_PROTOCOL = 2
 --   tools/deploy.py                      RELEASE_NAME
 --
 -- tests/wiring_test.lua fails if they disagree.
-local RM_BUILD = '0.23.0'
+local RM_BUILD = '0.23.1'
 
 -- The ghost roster on the wire: absolute END times on race.time, so a late
 -- client works out a shorter remainder, never a longer one.
@@ -1335,6 +1344,9 @@ local function broadcastState(targetPid)
     youRole      = selfRole,
     -- The results folder, for admin sends only; nil if unresolved.
     resultsPath  = selfAdmin and resultsFolderPath() or nil,
+    -- Admin sends only: where a closing session's results go (Save results).
+    resultsSave  = selfAdmin and { server = CFG.saveResultsOnServer == true,
+      admins = CFG.copyResultsToAdmins == true } or nil,
     -- Admin sends only: is a newer release out, and an update under way.
     prmUpdate    = selfAdmin and race.updateSnapshot and race.updateSnapshot(targetPid) or nil,
     -- Admin sends only: the Discord add-on, never its webhook URL.
@@ -1620,7 +1632,10 @@ end
 -- ---------------------------------------------------------------------------
 -- Results logging
 -- ---------------------------------------------------------------------------
--- Results: one .txt per session, written when it ends.
+-- Results: one .txt per session, built when it ends and sent where the Admin
+-- panel's Save results row says (CFG.saveResultsOnServer, copyResultsToAdmins):
+-- the server's results folder, each logged-in admin's PC, both or neither.
+-- Both are off as shipped. The text is built either way, for Discord.
 -- CODE AND DATA IN TWO FOLDERS: the .lua files in SERVER_DIR are replaced by
 -- every deploy; everything the server owns (tracks, cup, roster, garage,
 -- settings, results) lives under DATA_DIR and is never written by a release.
@@ -1673,6 +1688,23 @@ local function uniqueResultsPath(prefix)
     n = n + 1
     path = base .. '_' .. n .. '.txt'
   end
+end
+
+-- Where a session's results go (resultsOut.save and its helpers, below). One
+-- table for the locals ceiling. derby.lua and drag.lua are handed save as
+-- saveResults.
+local resultsOut = {}
+
+-- The name a session's results go under: the server file's own when one was
+-- written, else a dated one of the same shape (an admin's copy keeps only
+-- names of that shape: see raceManager.onResultsFile).
+function resultsOut.fileName(prefix, path)
+  if path then
+    -- Basename only; the separator built from a char code.
+    local base = path:gsub(string.char(92), '/'):match('([^/]+)$')
+    if base then return base end
+  end
+  return os.date(prefix .. '_%Y-%m-%d_%H-%M-%S') .. '.txt'
 end
 
 local function listResultFiles()
@@ -1970,22 +2002,23 @@ end
 
 -- A copy to every logged-in admin, written into their own BeamNG folder (race
 -- admins often have no access to the box). Capped: one BeamMP event must carry
--- it; over the cap they are told to use the server's copy.
+-- it; over the cap they are told so. Returns how many it went to.
 local MAX_RESULTS_PUSH = 60000
 
 local function sendResultsToAdmins(name, text)
-  if type(text) ~= 'string' or text == '' then return end
+  if type(text) ~= 'string' or text == '' then return 0 end
   local n = 0
   for pid in pairs(authenticatedPlayers) do n = n + 1 end
-  if n == 0 then return end
+  if n == 0 then return 0 end
   if #text > MAX_RESULTS_PUSH then
     for pid in pairs(authenticatedPlayers) do
-      MP.SendChatMessage(pid, '[RaceManager] Results were too large to send ('
-        .. #text .. ' bytes); the server copy is complete.')
+      MP.SendChatMessage(pid, '[RaceManager] Results were too large to send to your PC ('
+        .. #text .. ' bytes)'
+        .. (CFG.saveResultsOnServer and '; the server copy is complete.' or '.'))
     end
     print('[RaceManager] Results not sent to admins: ' .. #text .. ' bytes over the '
       .. MAX_RESULTS_PUSH .. ' limit')
-    return
+    return 0
   end
   for pid in pairs(authenticatedPlayers) do
     MP.TriggerClientEvent(pid, 'RM_ResultsFile', Util.JsonEncode({
@@ -1993,40 +2026,76 @@ local function sendResultsToAdmins(name, text)
   end
   print(string.format('[RaceManager] Results "%s" sent to %d admin(s), %d bytes',
     name, n, #text))
+  return n
 end
 
-local function writeResults(cupRound)
+-- Write `text` into the results folder: `appendText` added to `appendPath`
+-- while that file is still there, else `text` as a new dated file. The path,
+-- or nil and why.
+function resultsOut.writeFile(prefix, text, appendPath, appendText)
   ensureResultsDir()
-  local text = buildResultsText(cupRound)
-  -- A RERUN GOES UNDER THE RACE IT REPLACES, so a restart can never leave one
-  -- of the two unaccounted for. A file that has gone falls back to a new one.
-  local path, appended = race.appendTo, false
-  race.appendTo = nil
+  local path, mode, body = appendPath, 'a', appendText
   if path then
     local probe = io.open(path, 'r')
-    if probe then probe:close(); appended = true else path = nil end
+    if probe then probe:close() else path = nil end
   end
-  if appended then
-    text = '\n##################################################\n'
-      .. ' RESTART: the race above was stopped and run again. This is the rerun.\n'
-      .. '##################################################\n\n' .. text
-  else
-    path = uniqueResultsPath('results')
-  end
-  local f, err = io.open(path, appended and 'a' or 'w')
-  if not f then return false, tostring(err) end
-  f:write(text)
+  if not path then path, mode, body = uniqueResultsPath(prefix), 'w', text end
+  local f, err = io.open(path, mode)
+  if not f then return nil, tostring(err) end
+  f:write(body)
   f:close()
-  race.lastResults = path
-  -- Admins get the whole file, so their copy holds both races.
-  if appended then
-    local r = io.open(path, 'r')
-    if r then text = r:read('*a'); r:close() end
+  return path
+end
+
+-- One session's results to wherever the Admin panel sends them. `prefix` names
+-- the file (results, derby_results, drag_results). Returns what became of
+-- them, for the chat line and for Discord, which attaches `text`:
+-- { name, text, path = the server's file or nil, sent = admin copies, err }.
+-- `rerun` is the stopped race a restart's results go under.
+function resultsOut.save(prefix, text, rerun)
+  local out = { text = text, sent = 0 }
+  if CFG.saveResultsOnServer then
+    out.path, out.err = resultsOut.writeFile(prefix, text, rerun and rerun.path,
+      rerun and rerun.appendText)
   end
-  -- Basename only; the separator built from a char code.
-  local base = path:gsub(string.char(92), '/'):match('([^/]+)$') or 'results.txt'
-  sendResultsToAdmins(base, text)
-  return true, path, appended
+  -- The server file's name; else a rerun keeps the stopped race's, so an
+  -- admin's copy of that race is replaced by the one holding both.
+  out.name = out.path and resultsOut.fileName(prefix, out.path)
+    or (rerun and rerun.name) or resultsOut.fileName(prefix)
+  if CFG.copyResultsToAdmins then out.sent = sendResultsToAdmins(out.name, text) end
+  return out
+end
+
+-- Said to the admins logged in when a session's results were kept nowhere:
+-- not on the server, on no PC, not posted to Discord. A night's results are
+-- gone once the next session starts, so this is never left unsaid.
+function resultsOut.noteUnsaved(out, posted)
+  if posted or (out and (out.path or (out.sent or 0) > 0)) then return end
+  local msg = '[RaceManager] These results were not saved anywhere. To keep them, turn on '
+    .. 'Save results on the Admin panel (on the server, on admins\' PCs) or post them to Discord.'
+  for pid in pairs(authenticatedPlayers) do MP.SendChatMessage(pid, msg) end
+  print('[RaceManager] Results not saved: Save results is off and nothing was posted to Discord')
+end
+
+resultsOut.RESTART_BANNER = '\n##################################################\n'
+  .. ' RESTART: the race above was stopped and run again. This is the rerun.\n'
+  .. '##################################################\n\n'
+
+local function writeResults(cupRound)
+  local own = buildResultsText(cupRound)
+  -- A RERUN GOES UNDER THE RACE IT REPLACES, so a restart can never leave one
+  -- of the two unaccounted for. The stopped race's results ride in memory
+  -- (race.appendTo), so every copy holds both: the server's file has the rerun
+  -- added to it, or both written to a new one if that file has gone.
+  local prior = race.appendTo
+  race.appendTo = nil
+  local banner = resultsOut.RESTART_BANNER
+  local text = prior and (prior.text .. banner .. own) or own
+  local out = resultsOut.save('results', text, prior and {
+    path = prior.path, name = prior.name, appendText = banner .. own })
+  out.appended = prior ~= nil
+  race.lastResults = out
+  return out
 end
 
 -- ---------------------------------------------------------------------------
@@ -2339,19 +2408,29 @@ local function finishSession(reason)
   race.closedHow = race.voided
     and (race.voided .. '. Not scored in the cup; the rerun is added below.') or reason
   race.lastResults = nil
-  local ok, wrote, pathOrErr, appended = pcall(writeResults, cupRound)
+  local ok, out = pcall(writeResults, cupRound)
   race.closedHow = nil
-  if ok and wrote then
-    MP.SendChatMessage(-1, '[RaceManager] Session complete! Results saved on the server: ' .. pathOrErr
-      .. (appended and ' (added below the race it restarted)' or ''))
-    print('[RaceManager] Results written to ' .. pathOrErr)
+  if not ok then
+    print('[RaceManager] Failed to build the results: ' .. tostring(out))
+    out = nil
+  elseif out.err then
+    print('[RaceManager] Failed to write results: ' .. out.err)
+  end
+  if out and out.path then
+    MP.SendChatMessage(-1, '[RaceManager] Session complete! Results saved on the server: ' .. out.path
+      .. (out.appended and ' (added below the race it restarted)' or ''))
+    print('[RaceManager] Results written to ' .. out.path)
   else
-    print('[RaceManager] Failed to write results: ' .. tostring(ok and pathOrErr or wrote))
+    MP.SendChatMessage(-1, '[RaceManager] Session complete!')
   end
   -- Not a race stopped to be run again: the rerun posts, with both in its file.
+  local posted = false
   if race.discordPost and not race.voided then
-    race.discordPost('race', { reason = reason, file = ok and wrote and pathOrErr or nil })
+    posted = race.discordPost('race', { reason = reason, file = out and out.path,
+      results = out and { name = out.name, text = out.text } })
   end
+  -- A stopped race is kept for its rerun, which is the one that says so.
+  if not race.voided then resultsOut.noteUnsaved(out, posted) end
 end
 
 -- Close a race with a car home: everyone still out is classified where they
@@ -4168,7 +4247,7 @@ function RM_onRestartFromGrid(pid)
   MP.SendChatMessage(-1, '[RaceManager] RACE RESTART: the field is back on the same grid. '
     .. 'Start Countdown when everyone is ready.')
   print('[RaceManager] Race restarted from the grid by ' .. who
-    .. (race.appendTo and (', rerun goes into ' .. race.appendTo) or ''))
+    .. (race.appendTo and (', rerun goes into ' .. (race.appendTo.path or race.appendTo.name)) or ''))
 end
 
 function RM_onResetLeaderboard(pid)
@@ -4477,6 +4556,33 @@ function RM_onClearResults(pid)
     MP.GetPlayerName(pid) or pid, removed, removed == 1 and '' or 's', RESULTS_DIR)
   MP.SendChatMessage(-1, msg)
   print(msg)
+end
+
+-- SAVE RESULTS: where a closing session's results go, `server` (the results
+-- folder) and `admins` (a copy to each logged-in admin's PC). Both off as
+-- shipped. ADMIN ONLY, as Clear Results Cache is: turning the server copy off
+-- decides what a league keeps. Written to config.json, so it survives a restart.
+function RM_onSetResultsSave(pid, rawData)
+  if not auth.requireFull(pid) then return end
+  local data = adminPayload(pid, rawData)
+  if not data then return end
+  local said = {}
+  if type(data.server) == 'boolean' and data.server ~= CFG.saveResultsOnServer then
+    CFG.saveResultsOnServer = data.server
+    said[#said + 1] = 'on the server ' .. (data.server and 'on' or 'off')
+  end
+  if type(data.admins) == 'boolean' and data.admins ~= CFG.copyResultsToAdmins then
+    CFG.copyResultsToAdmins = data.admins
+    said[#said + 1] = 'on admins\' PCs ' .. (data.admins and 'on' or 'off')
+  end
+  if #said > 0 then
+    local kept = saveConfigToDisk()
+    print('[RaceManager] Save results: ' .. table.concat(said, ', ') .. ' by '
+      .. (MP.GetPlayerName(pid) or pid)
+      .. (kept and '' or ' (config.json could not be written: it reverts on restart)'))
+  end
+  -- Every admin's panel, so a second one does not show the old switches.
+  for adminPid in pairs(authenticatedPlayers) do broadcastState(adminPid) end
 end
 
 -- A client asks for state (the app opened, or it just joined).
@@ -4806,7 +4912,9 @@ local function applyConfigTable(data)
   num('holdTolerance', 0.1, 10)
   num('holdCorrectEvery', 0.05, 5)
   bool('readyCheck')
-  str('mapRestart', { auto = true, watch = true, relaunch = true, exit = true, manual = true })
+  bool('saveResultsOnServer')
+  bool('copyResultsToAdmins')
+  str('mapRestart',{ auto = true, watch = true, relaunch = true, exit = true, manual = true })
   num('mapRestartGrace', 10, 3600)
   bool('mapVoting')
   num('mapVotePercent', 1, 100)
@@ -4814,6 +4922,11 @@ local function applyConfigTable(data)
   -- owner/name and nothing else: it becomes part of a URL a download job runs.
   if type(data.updateRepo) == 'string' then
     local repo = data.updateRepo
+    -- The repo's old home. Every config.json saved before the move names it,
+    -- and only GitHub's redirect still reaches it.
+    if repo:lower() == 'aosjay13/beamng-race-manager-by-phoenix' then
+      repo = 'Ashes-to-Light-Studios/Phoenix-Race-Manager-for-BeamNG'
+    end
     if #repo <= 140 and repo:match('^[%w][%w%-]*/[%w%-%._]+$') and not repo:find('..', 1, true) then
       CFG.updateRepo = repo; applied = applied + 1
     else
@@ -4887,6 +5000,8 @@ local function configFileText()
     holdTolerance   = CFG.holdTolerance,
     holdCorrectEvery = CFG.holdCorrectEvery,
     readyCheck      = CFG.readyCheck,
+    saveResultsOnServer = CFG.saveResultsOnServer,
+    copyResultsToAdmins = CFG.copyResultsToAdmins,
     mapRestart      = CFG.mapRestart,
     mapRestartGrace = CFG.mapRestartGrace,
     mapVoting       = CFG.mapVoting,
@@ -6685,7 +6800,7 @@ derbyMod.init({
   LAYOUTS_DIR = LAYOUTS_DIR, MAX_LAYOUT_NAME = MAX_LAYOUT_NAME,
   RM_PROTOCOL = RM_PROTOCOL,
   aliasNote = aliasNote, decodeString = decodeString, displayName = displayName,
-  ensureLayoutsDir = ensureLayoutsDir, ensureResultsDir = ensureResultsDir,
+  ensureLayoutsDir = ensureLayoutsDir,
   -- The filesystem helpers, for the derby's own per-map arena store.
   listDirectory = listDirectory, makeDirectory = makeDirectory,
   removeFile = removeFile,
@@ -6695,7 +6810,8 @@ derbyMod.init({
   requireAuth = requireAuth, respawnField = respawnField,
   -- Deleting an arena is as irreversible as deleting a layout.
   requireAdmin = auth.requireFull,
-  uniqueResultsPath = uniqueResultsPath,
+  -- Where its results go, as the Admin panel's Save results row says.
+  saveResults = resultsOut.save, noteResultsUnsaved = resultsOut.noteUnsaved,
   players = players, race = race, sanitizeCheckpoints = sanitizeCheckpoints,
 })
 
@@ -6716,10 +6832,11 @@ do
   mod.init({
     LAYOUTS_DIR = LAYOUTS_DIR, RM_PROTOCOL = RM_PROTOCOL,
     displayName = displayName, ensureLayoutsDir = ensureLayoutsDir,
-    ensureResultsDir = ensureResultsDir, forceSpectate = forceSpectate,
+    forceSpectate = forceSpectate,
     isEntrant = isEntrant, jsonParse = jsonParse, jsonStringify = jsonStringify,
     onlinePlayers = onlinePlayers, releaseSpectators = releaseSpectators,
-    requireAuth = requireAuth, uniqueResultsPath = uniqueResultsPath,
+    requireAuth = requireAuth,
+    saveResults = resultsOut.save, noteResultsUnsaved = resultsOut.noteUnsaved,
     players = players, race = race,
   })
   race.dragUnderWay     = mod.underWay
@@ -6869,10 +6986,12 @@ end)()
   })
   race.discordSnapshot = mod.snapshot
   race.discordWarm     = mod.warm
-  -- A Discord fault must never stop a session closing.
+  -- A Discord fault must never stop a session closing. True when a post is on
+  -- its way, so the session can tell whether its results were kept anywhere.
   race.discordPost = function (kind, data)
-    local done, err = pcall(mod.post, kind, data)
-    if not done then print('[RaceManager] Discord post failed: ' .. tostring(err)) end
+    local done, res = pcall(mod.post, kind, data)
+    if not done then print('[RaceManager] Discord post failed: ' .. tostring(res)) end
+    return done and res == true
   end
 end)()
 
@@ -8881,6 +9000,7 @@ function onInit()
   MP.RegisterEvent('RM_EndRace',          'RM_onEndRace')
   MP.RegisterEvent('RM_ResetLeaderboard', 'RM_onResetLeaderboard')
   MP.RegisterEvent('RM_ClearResults',     'RM_onClearResults')
+  MP.RegisterEvent('RM_SetResultsSave',   'RM_onSetResultsSave')
   MP.RegisterEvent('RM_Lap',              'RM_onLap')
   MP.RegisterEvent('RM_Progress',         'RM_onProgress')  -- live position telemetry
   MP.RegisterEvent('RM_RequestState',     'RM_onRequestState')

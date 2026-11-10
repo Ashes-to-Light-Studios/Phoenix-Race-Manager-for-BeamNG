@@ -195,7 +195,7 @@ local TUNE = {
 
 -- Build stamp, pushed to the UI. Must match the server plugin and app.js -- see
 -- the note in main.lua for why a mismatch is otherwise invisible.
-local RM_BUILD = '0.23.0'
+local RM_BUILD = '0.23.1'
 
 -- ---------------------------------------------------------------------------
 -- State
