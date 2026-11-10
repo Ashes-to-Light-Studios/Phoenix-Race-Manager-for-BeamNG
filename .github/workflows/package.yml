@@ -320,9 +320,9 @@ jobs:
       #
       # discord.yml would do this, but it never hears about this release:
       # GitHub does not start workflows for what a workflow's own token did.
-      # So the same script is run here, on an event written out by hand, in
-      # the name of whoever pressed Run. A post that fails is a pity and
-      # nothing more -- the release above is already out.
+      # So the same script is run here, on an event written out by hand. A
+      # post that fails is a pity and nothing more -- the release above is
+      # already out.
       - name: Post to Discord
         continue-on-error: true
         env:
