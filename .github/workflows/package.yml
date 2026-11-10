@@ -315,3 +315,25 @@ jobs:
             dist/PRM-Setup.exe
             dist/PRM-Install.sh
             dist/RaceManager-${{ needs.package.outputs.tag }}.zip
+
+      # --- Tell the Discord channel ---
+      #
+      # discord.yml would do this, but it never hears about this release:
+      # GitHub does not start workflows for what a workflow's own token did.
+      # So the same script is run here, on an event written out by hand, in
+      # the name of whoever pressed Run. A post that fails is a pity and
+      # nothing more -- the release above is already out.
+      - name: Post to Discord
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          TAG: ${{ needs.package.outputs.tag }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > release.json
+          jq -n --slurpfile r release.json --arg who "$GITHUB_ACTOR" --arg server "$GITHUB_SERVER_URL" '{
+            action: "published",
+            release: $r[0],
+            sender: { login: $who, html_url: "\($server)/\($who)", avatar_url: "\($server)/\($who).png" }
+          }' > event.json
+          bash .github/scripts/discord-post.sh release event.json
