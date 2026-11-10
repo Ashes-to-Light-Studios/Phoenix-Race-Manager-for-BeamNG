@@ -15,8 +15,9 @@
 # posted under their GitHub login and GitHub picture.
 #
 # Environment:
-#   DISCORD_WEBHOOK_URL  the channel's webhook URL. Empty: say so and exit 0,
-#                        so a repo without the secret stays green.
+#   DISCORD_WEBHOOK_URL  the channel's webhook URL, or several, one per line:
+#                        each gets every post. Empty: say so and exit 0, so a
+#                        repo without the secret stays green.
 #   DISCORD_DRY_RUN      set to print the JSON instead of posting it.
 set -euo pipefail
 
@@ -138,16 +139,28 @@ if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
   exit 0
 fi
 
+# ONE SECRET, ANY NUMBER OF WEBHOOKS: one URL per line (or separated by
+# spaces). Every URL gets every post. One that fails does not stop the rest,
+# and the run goes red at the end so it is noticed.
+#
 # The /github ending is Discord's GitHub-format endpoint and rejects this JSON.
 # Somebody pasting the URL from the old integration gets the plain one anyway.
-url="${DISCORD_WEBHOOK_URL%/}"
-url="${url%/github}"
-
-# No -v and no URL in any output: the URL is the credential.
-status=$(curl -sS -o /tmp/discord-response -w '%{http_code}' \
-  -H 'Content-Type: application/json' --data-binary "$message" "$url")
-if [ "$status" -ge 300 ]; then
-  echo "::error::Discord answered $status: $(cat /tmp/discord-response)"
-  exit 1
-fi
-echo "Posted to Discord ($status)."
+#
+# No -v and no URL in any output: the URL is the credential. Webhooks are
+# named by their position in the secret instead.
+n=0
+failed=0
+for url in $(printf '%s' "$DISCORD_WEBHOOK_URL" | tr -d '\r'); do
+  n=$((n + 1))
+  url="${url%/}"
+  url="${url%/github}"
+  status=$(curl -sS -o /tmp/discord-response -w '%{http_code}' \
+    -H 'Content-Type: application/json' --data-binary "$message" "$url") || status=000
+  if [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
+    echo "Webhook $n: posted ($status)."
+  else
+    echo "::error::Webhook $n: Discord answered $status: $(cat /tmp/discord-response 2>/dev/null)"
+    failed=1
+  fi
+done
+exit "$failed"

@@ -10,7 +10,8 @@ name: Post to Discord
 #
 # SET UP ONCE, by a repo admin: Settings, Secrets and variables, Actions, New
 # repository secret, named DISCORD_WEBHOOK_URL, holding the channel's webhook
-# URL (without /github on the end). Until then every run says so and stays
+# URL (without /github on the end). For more than one channel, put every
+# URL in that same secret, one per line. Until then every run says so and stays
 # green.
 #
 # pull_request_target, not pull_request: a pull request from a fork gets no
