@@ -24,10 +24,13 @@
 set -euo pipefail
 
 # login (any case) | screen name | avatar URL
-# The sun is Twemoji's U+2600 (CC-BY 4.0), pinned to a version so it cannot
-# change underneath us. Any public PNG or JPG URL works here.
+# The avatar has to be a PUBLIC web address: Discord fetches the picture
+# itself, so a file is used by putting it in this repo and linking to it. The
+# sun is .github/discord/sun.png, as GitHub serves it from main. To change the
+# picture, replace that file -- under a NEW NAME, and change the link to
+# match, or Discord keeps showing the copy it already fetched.
 IDENTITIES='
-JHaseldenDev|Jraysunshine|https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2600.png
+JHaseldenDev|Jraysunshine|https://raw.githubusercontent.com/Ashes-to-Light-Studios/Phoenix-Race-Manager-for-BeamNG/main/.github/discord/sun.png
 '
 
 event="${1:?usage: discord-post.sh <event name> <event payload file>}"
