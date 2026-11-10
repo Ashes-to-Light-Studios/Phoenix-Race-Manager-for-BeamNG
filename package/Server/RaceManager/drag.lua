@@ -18,9 +18,10 @@ local D = {}
 
 -- Assigned by init: a value captured at file load would be nil.
 local LAYOUTS_DIR, RM_PROTOCOL
-local displayName, ensureLayoutsDir, ensureResultsDir
+local displayName, ensureLayoutsDir
 local forceSpectate, isEntrant, jsonParse, jsonStringify
-local onlinePlayers, releaseSpectators, requireAuth, uniqueResultsPath
+local onlinePlayers, releaseSpectators, requireAuth
+local saveResults, noteResultsUnsaved
 local players, race
 
 -- Set later by setCupHooks (the cup is assigned at the end of main.lua); nil
@@ -38,10 +39,11 @@ end
 function D.init(h)
   LAYOUTS_DIR, RM_PROTOCOL = h.LAYOUTS_DIR, h.RM_PROTOCOL
   displayName, ensureLayoutsDir = h.displayName, h.ensureLayoutsDir
-  ensureResultsDir, forceSpectate = h.ensureResultsDir, h.forceSpectate
+  forceSpectate = h.forceSpectate
   isEntrant, jsonParse, jsonStringify = h.isEntrant, h.jsonParse, h.jsonStringify
   onlinePlayers, releaseSpectators = h.onlinePlayers, h.releaseSpectators
-  requireAuth, uniqueResultsPath = h.requireAuth, h.uniqueResultsPath
+  requireAuth = h.requireAuth
+  saveResults, noteResultsUnsaved = h.saveResults, h.noteResultsUnsaved
   players, race = h.players, h.race
   DRAG_FILE = LAYOUTS_DIR .. '/dragLadder.json'
 end
@@ -925,11 +927,12 @@ local function lowETEntrant()
   return best
 end
 
+-- Built as text, then sent wherever the Admin panel's Save results row says
+-- (main.lua's resultsOut.save): { name, text, path, sent, err }.
 local function writeResults(cupRound)
-  ensureResultsDir()
-  local path = uniqueResultsPath('drag_results')
-  local f, ferr = io.open(path, 'w')
-  if not f then return false, tostring(ferr) end
+  local buf = {}
+  -- f:write adds to the text: the layout below is written as it always was.
+  local f = { write = function (_, s) buf[#buf + 1] = s end }
   local FORMAT_NAME = { single = 'Single elimination', double = 'Double elimination',
                         points = 'Points shootout' }
   f:write('RACE MANAGER - DRAG TOURNAMENT\n')
@@ -993,8 +996,7 @@ local function writeResults(cupRound)
     f:write(l .. '\n')
   end
   f:write('\n')
-  f:close()
-  return true, path
+  return saveResults('drag_results', table.concat(buf))
 end
 
 finishTournament = function (reason)
@@ -1033,21 +1035,25 @@ finishTournament = function (reason)
     if okCup then cupRound = banked
     else print('[RaceManager] Cup scoring failed for the drag round: ' .. tostring(banked)) end
   end
-  local ok, wrote, pathOrErr = pcall(writeResults, cupRound)
-  if ok and wrote then
-    MP.SendChatMessage(-1, '[RaceManager] DRAG TOURNAMENT WINNER: '
-      .. tostring(ladder.champion) .. '! Results saved: ' .. tostring(pathOrErr))
-    print('[RaceManager] Drag results written to ' .. tostring(pathOrErr))
-  else
-    print('[RaceManager] Failed to write drag results: '
-      .. tostring(ok and pathOrErr or wrote))
+  local ok, out = pcall(writeResults, cupRound)
+  if not ok then
+    print('[RaceManager] Failed to build the drag results: ' .. tostring(out))
+    out = nil
+  elseif out.err then
+    print('[RaceManager] Failed to write drag results: ' .. out.err)
   end
+  MP.SendChatMessage(-1, '[RaceManager] DRAG TOURNAMENT WINNER: '
+    .. tostring(ladder.champion) .. '!'
+    .. (out and out.path and (' Results saved: ' .. out.path) or ''))
+  if out and out.path then print('[RaceManager] Drag results written to ' .. out.path) end
   -- The optional Discord add-on (server/RaceManager/discord.lua).
+  local posted = false
   if race.discordPost then
-    race.discordPost('drag', { list = ladder.finishOrder, champion = ladder.champion,
+    posted = race.discordPost('drag', { list = ladder.finishOrder, champion = ladder.champion,
       format = drag.format, entrants = #ladder.entrants, reason = reason,
-      file = ok and wrote and pathOrErr or nil })
+      file = out and out.path, results = out and { name = out.name, text = out.text } })
   end
+  noteResultsUnsaved(out, posted)
 end
 
 -- Every pass in the round is done. Score whatever the format scores between

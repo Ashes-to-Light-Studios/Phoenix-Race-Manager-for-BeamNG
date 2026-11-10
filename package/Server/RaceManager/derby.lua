@@ -17,9 +17,10 @@ local D = {}
 -- Assigned by init: a value captured at file load would be nil.
 local LAYOUTS_DIR, MAX_LAYOUT_NAME, RM_PROTOCOL
 local aliasNote, decodeString, displayName
-local ensureLayoutsDir, ensureResultsDir, forceSpectate, getCurrentMap
+local ensureLayoutsDir, forceSpectate, getCurrentMap
 local isEntrant, jsonParse, jsonStringify, onlinePlayers
-local releaseSpectators, requireAuth, respawnField, uniqueResultsPath
+local releaseSpectators, requireAuth, respawnField
+local saveResults, noteResultsUnsaved
 local requireAdmin
 local players, race, sanitizeCheckpoints
 
@@ -40,11 +41,12 @@ local listDirectory, makeDirectory, removeFile
 function D.init(h)
   LAYOUTS_DIR, MAX_LAYOUT_NAME, RM_PROTOCOL = h.LAYOUTS_DIR, h.MAX_LAYOUT_NAME, h.RM_PROTOCOL
   aliasNote, decodeString, displayName = h.aliasNote, h.decodeString, h.displayName
-  ensureLayoutsDir, ensureResultsDir = h.ensureLayoutsDir, h.ensureResultsDir
+  ensureLayoutsDir = h.ensureLayoutsDir
   forceSpectate, getCurrentMap = h.forceSpectate, h.getCurrentMap
   isEntrant, jsonParse, jsonStringify = h.isEntrant, h.jsonParse, h.jsonStringify
   onlinePlayers, releaseSpectators = h.onlinePlayers, h.releaseSpectators
-  requireAuth, respawnField, uniqueResultsPath = h.requireAuth, h.respawnField, h.uniqueResultsPath
+  requireAuth, respawnField = h.requireAuth, h.respawnField
+  saveResults, noteResultsUnsaved = h.saveResults, h.noteResultsUnsaved
   requireAdmin = h.requireAdmin
   players, race, sanitizeCheckpoints = h.players, h.race, h.sanitizeCheckpoints
   listDirectory, makeDirectory = h.listDirectory, h.makeDirectory
@@ -369,14 +371,10 @@ local function buildDerbyResultsText(cupRound)
   return table.concat(lines, '\n') .. '\n'
 end
 
+-- Wherever the Admin panel's Save results row sends them (main.lua's
+-- resultsOut.save): { name, text, path, sent, err }.
 local function writeDerbyResults(cupRound)
-  ensureResultsDir()
-  local path = uniqueResultsPath('derby_results')
-  local f, err = io.open(path, 'w')
-  if not f then return false, tostring(err) end
-  f:write(buildDerbyResultsText(cupRound))
-  f:close()
-  return true, path
+  return saveResults('derby_results', buildDerbyResultsText(cupRound))
 end
 
 -- Every driver gets their car back through the racing side's staggered, ghosted
@@ -424,22 +422,26 @@ local function finishDerby(reason)
   if cupOnDerbyComplete then
     cupRound = cupOnDerbyComplete(derbyClassification(), { duration = derby.time })
   end
-  local ok, wrote, pathOrErr = pcall(writeDerbyResults, cupRound)
-  if ok and wrote then
-    local msg = derby.winner
-      and ('[RaceManager] DEMO DERBY WINNER: ' .. derby.winner .. '! Results saved: ' .. pathOrErr)
-      or  ('[RaceManager] Demo derby over (' .. reason .. '). Results saved: ' .. pathOrErr)
-    MP.SendChatMessage(-1, msg)
-    print('[RaceManager] Derby results written to ' .. pathOrErr)
-  else
-    print('[RaceManager] Failed to write derby results: ' .. tostring(ok and pathOrErr or wrote))
+  local ok, out = pcall(writeDerbyResults, cupRound)
+  if not ok then
+    print('[RaceManager] Failed to build the derby results: ' .. tostring(out))
+    out = nil
+  elseif out.err then
+    print('[RaceManager] Failed to write derby results: ' .. out.err)
   end
+  local saved = out and out.path and (' Results saved: ' .. out.path) or ''
+  MP.SendChatMessage(-1, derby.winner
+    and ('[RaceManager] DEMO DERBY WINNER: ' .. derby.winner .. '!' .. saved)
+    or  ('[RaceManager] Demo derby over (' .. reason .. ').' .. saved))
+  if out and out.path then print('[RaceManager] Derby results written to ' .. out.path) end
   -- The optional Discord add-on (server/RaceManager/discord.lua).
+  local posted = false
   if race.discordPost then
-    race.discordPost('derby', { list = derbyClassification(), duration = derby.time,
+    posted = race.discordPost('derby', { list = derbyClassification(), duration = derby.time,
       winner = derby.winner, arena = derby.arena, reason = reason,
-      file = ok and wrote and pathOrErr or nil })
+      file = out and out.path, results = out and { name = out.name, text = out.text } })
   end
+  noteResultsUnsaved(out, posted)
 end
 
 -- Eliminate one participant; when exactly one is left standing the derby ends
