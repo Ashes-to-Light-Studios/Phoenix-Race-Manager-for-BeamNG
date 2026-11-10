@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Post one GitHub event to a Discord channel, under the name and avatar of
-# whoever caused it.
+# Post one GitHub event to a Discord channel, under the studio's name and
+# avatar, whoever caused it.
 #
 #   discord-post.sh <event name> <event payload file>
 #
@@ -8,11 +8,10 @@
 # on the end). That one renders the message itself, always as "GitHub" with the
 # sender's GitHub name and picture, and offers nothing to change. Posting the
 # JSON ourselves to the PLAIN webhook URL lets each message carry its own
-# `username` and `avatar_url`, and its own embed author.
+# `username` and `avatar_url`.
 #
-# WHO IS SHOWN AS WHOM is the table just below: a GitHub login on the left is
-# posted under the screen name and avatar on the right. Anybody not listed is
-# posted under their GitHub login and GitHub picture.
+# EVERY POST IS FROM THE STUDIO: the name and avatar just below, the same for
+# everybody. Who pushed or commented is not shown.
 #
 # Environment:
 #   DISCORD_WEBHOOK_URL  the channel's webhook URL, or several, one per line:
@@ -23,15 +22,14 @@
 #   DISCORD_DRY_RUN      set to print the JSON instead of posting it.
 set -euo pipefail
 
-# login (any case) | screen name | avatar URL
 # The avatar has to be a PUBLIC web address: Discord fetches the picture
 # itself, so a file is used by putting it in this repo and linking to it. The
-# sun is .github/discord/sun.png, as GitHub serves it from main. To change the
-# picture, replace that file -- under a NEW NAME, and change the link to
-# match, or Discord keeps showing the copy it already fetched.
-IDENTITIES='
-JHaseldenDev|JraySunshine|https://raw.githubusercontent.com/Ashes-to-Light-Studios/Phoenix-Race-Manager-for-BeamNG/main/.github/discord/sun.png
-'
+# logo is .github/discord/ashes-to-light.png, as GitHub serves it from main.
+# To change the picture, replace that file -- under a NEW NAME, and change the
+# link to match, or Discord keeps showing the copy it already fetched. The
+# League Manager repo links to the same file.
+POST_AS_NAME='Ashes to Light Studios'
+POST_AS_AVATAR='https://raw.githubusercontent.com/Ashes-to-Light-Studios/Phoenix-Race-Manager-for-BeamNG/main/.github/discord/ashes-to-light.png'
 
 event="${1:?usage: discord-post.sh <event name> <event payload file>}"
 payload="${2:?usage: discord-post.sh <event name> <event payload file>}"
@@ -42,21 +40,14 @@ message=$(jq -c \
   --arg event "$event" \
   --arg repo "${repo#*/}" \
   --arg repo_url "$server/$repo" \
-  --arg identities "$IDENTITIES" '
+  --arg name "$POST_AS_NAME" \
+  --arg avatar "$POST_AS_AVATAR" '
   def trunc(n): if length > n then .[0:n-1] + "…" else . end;
   def first_line: (. // "") | split("\n")[0];
   def body(n): (. // "") | gsub("\r"; "") | trunc(n);
 
-  # --- who ---
-  (.sender.login // "GitHub") as $login
-  | ([$identities | split("\n")[] | select(length > 0) | split("|")
-      | select(.[0] | ascii_downcase == ($login | ascii_downcase))][0]) as $known
-  | ($known[1] // $login) as $name
-  | ($known[2] // .sender.avatar_url) as $avatar
-  | (.sender.html_url // $repo_url) as $profile
-
   # --- what: null means "nothing worth a post" ---
-  | (if $event == "push" then
+  (if $event == "push" then
       (.ref | sub("^refs/(heads|tags)/"; "")) as $ref
       | (.ref | startswith("refs/tags/")) as $is_tag
       | if .deleted then
@@ -123,9 +114,7 @@ message=$(jq -c \
         # Commit messages and comments are text written by others: never let an
         # @everyone in one of them ping the channel.
         allowed_mentions: { parse: [] },
-        embeds: [ $embed
-          + { title: ($embed.title | trunc(256)) }
-          + { author: { name: ($name | trunc(256)), url: $profile, icon_url: $avatar } } ] }
+        embeds: [ $embed + { title: ($embed.title | trunc(256)) } ] }
     end
 ' "$payload")
 

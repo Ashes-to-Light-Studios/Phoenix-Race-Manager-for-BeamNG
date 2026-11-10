@@ -1,7 +1,7 @@
 name: Post to Discord
 
-# Repo activity, posted to the Discord channel under the name and avatar of
-# whoever caused it. Who is shown as whom is the table at the top of
+# Repo activity, posted to the Discord channel under the studio's name and
+# avatar, whoever caused it. Both are set at the top of
 # .github/scripts/discord-post.sh.
 #
 # THIS REPLACES the webhook under Settings, Webhooks whose URL ends in /github.
