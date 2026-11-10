@@ -5,7 +5,8 @@ standings, lap counts, best and last lap times, and real-time gaps for every
 driver on the server.
 
 You place checkpoint gates by driving the track, run a qualifying session, let
-it build the starting grid, and the server writes a results file at the flag.
+it build the starting grid, and keep the results at the flag: on the server, on
+your own PC, on Discord, or all three.
 
 | | |
 |---|---|
@@ -192,9 +193,12 @@ the pace car is a formation lap plus 5 racing laps, and the board counts the
 racing ones. A red flag holds the green, and the **Green flag** button ends the
 pace lap at any time if the field never makes it round.
 
-**7. Results.** At the flag the server writes a results file to
-`Resources/Server/RaceManager/results/` and announces the path in chat, ready for
-league standings, with the cup round it just banked appended if a cup is running.
+**7. Results.** At the flag the server builds a results file, ready for league
+standings, with the cup round it just banked appended if a cup is running. You
+choose where it goes on the **Admin** panel's **Save results** row: **On the
+server** (`Resources/Server/RaceManager/Data/results/`, with the path announced
+in chat) and **On admins' PCs**. **Both are off until you turn them on**, so do
+that before the first race you want to keep. Discord is its own row.
 **Reset** clears the session for the next one.
 
 > Each step has more to it: grid pinning, final-lap rules, what happens to a
@@ -230,6 +234,7 @@ expect without touching any of it.
 | **[Updates from the game](docs/REFERENCE.md#updating-from-the-admin-tab)** | The server looks for a newer release on GitHub at startup and asks the admin. **Update and restart** downloads it, checks it against GitHub's SHA-256, keeps the old files, swaps the new ones in and restarts the server. Tracks, the cup and results are untouched. |
 | **[Map display names](docs/REFERENCE.md#map-display-names)** | Show `bark_river_sc` as *Bark River International* in the map menus, the vote and the switch. Display only: no file is renamed. |
 | **[Lap records](docs/REFERENCE.md#lap-records)** | Each driver's fastest lap on every saved layout, per map, kept across restarts and open to everyone. Scored from qualifying and races. An admin can take a time off or clear a board in game, or edit the JSON on the server. |
+| **[Where results go](docs/REFERENCE.md#where-results-go)** | A results file for every race, derby and drag tournament, kept on the server, sent to each admin's PC, both or neither. Two switches on the Admin tab, off until you turn them on. |
 | **[Results on Discord](docs/REFERENCE.md#posting-results-to-discord)** | Paste a channel's webhook URL on the Admin tab and every race, derby and drag tournament posts its results there as it closes, with the full results file attached. Qualifying too if you want it. Off until a webhook is set. |
 | **[Drag racing](docs/REFERENCE.md#drag-racing-parallel-game-mode)** | A tournament ladder down a drag strip: single or double elimination, or a points shootout. Two to eight cars a pass with any number going through, a christmas tree with real red lights, reaction times, elapsed times and trap speeds, and dial-in bracket racing. Scores into the cup on a table of its own. The strip is an ordinary point-to-point layout saved with the type Drag, so the track editor already builds one, and a practice pass lets one driver try it before a field turns up. |
 | **[Broadcast board](docs/REFERENCE.md#broadcast-board-spectators)** | A spectator's board for streaming: the whole field, the drivers who are out and why, cup standings, and click a name to put the camera on that car in orbit. |

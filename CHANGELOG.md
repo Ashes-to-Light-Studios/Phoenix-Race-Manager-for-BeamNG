@@ -18,6 +18,26 @@ tag, the packaged zip, and the build stamp the app shows - see the note in
   server whose `config.json` still names the old one in `updateRepo` is
   switched over at boot. One pointed at a fork keeps its own.
 
+- **You choose where results are saved.** Every results file used to be
+  written to the server's `Data/results/` folder and sent to the PC of every
+  admin logged in, with no way to stop either. The new **Save results** row on
+  the **Admin** panel has a switch for each, **On the server** and **On admins'
+  PCs**, for races, derbies and drag tournaments alike; Discord keeps its own
+  row. **Both are off until you turn them on**, on a server that updates as
+  well as a new one, so turn on the ones you want before the next race you mean
+  to keep. When a session's results are kept nowhere at all, every admin logged
+  in is told in chat. Copies to admins' PCs now include derbies and drag
+  tournaments, and Discord attaches the results file whether or not the server
+  keeps one. A rerun after **Restart from grid** still shares one file with the
+  race it replaced, wherever that file is kept. The admin tier's only;
+  `saveResultsOnServer` and `copyResultsToAdmins` in `config.json`.
+
+#### Fixed
+
+- **A Discord post with more than 20 drivers** said the rest were in the file
+  attached even when attaching was switched off. It now says where they are:
+  attached, on the server, or neither.
+
 ## 0.23.0 - Results on Discord
 
 #### Added

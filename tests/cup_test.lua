@@ -188,6 +188,8 @@ local function bootPlugin()
   -- The ready check is off after every admin login here: this suite pins the
   -- race engine behind it. tests/ready_test.lua covers calling the grid.
   RM_onLogin(ADMIN, '{"password":"phoenix"}'); RM_onSetReadyCheck(ADMIN, '{"on":false}')
+  -- Results are saved nowhere as shipped; this suite reads the server's file.
+  RM_onSetResultsSave(ADMIN, '{"server":true}')
 end
 
 -- Put the names back after a restart.

@@ -96,6 +96,8 @@ onInit()
 RM_onPlayerJoin(1); RM_onPlayerJoin(2); RM_onPlayerJoin(3)
 -- This suite predates the entry list; run it with entry open to everyone.
 adminLogin(1)
+-- Results are saved nowhere as shipped; this suite reads the server's file.
+RM_onSetResultsSave(1, '{"server":true}')
 RM_onLogout(1)
 lastState = nil
 

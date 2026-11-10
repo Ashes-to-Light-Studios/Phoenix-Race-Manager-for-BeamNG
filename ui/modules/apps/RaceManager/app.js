@@ -2204,6 +2204,10 @@ var rectSeen = { width: null, length: null, rot: null, wall: null, wallDepth: nu
           $scope.adminPresent = !!data.adminPresent;
           // Targeted admin sends only, so a non-admin never even sees the row.
           if (typeof data.resultsPath === 'string') { $scope.resultsPath = data.resultsPath; }
+          // And where results go (Save results).
+          if (data.resultsSave && typeof data.resultsSave === 'object') {
+            $scope.resultsSave = data.resultsSave;
+          }
           // The same: a newer release, and an update under way.
           if (data.prmUpdate && typeof data.prmUpdate === 'object') {
             $scope.prmUpdate = data.prmUpdate;
@@ -4072,6 +4076,26 @@ var rectSeen = { width: null, length: null, rot: null, wall: null, wallDepth: nu
       $scope.clearLocalResults = function () {
         $scope.resultsUi.confirmLocal = false;
         bngApi.engineLua('raceManager.clearLocalResults()');
+      };
+      // Save results: where a closing session's results go, { server, admins }.
+      // Both off as shipped. It rides this admin's own RaceManagerUpdate; an
+      // older server never sends it, and there the row stays hidden. Changing
+      // it is the admin tier's, as Clear Results Cache is.
+      $scope.resultsSave = null;
+      $scope.toggleResultsSave = function (which) {
+        if (!$scope.resultsSave || !$scope.isFullAdmin()) { return; }
+        bngApi.engineLua('raceManager.setResultsSave(' + luaStr(which) + ', '
+          + (!$scope.resultsSave[which]) + ')');
+      };
+      $scope.resultsSaveText = function () {
+        var s = $scope.resultsSave;
+        if (!s) { return ''; }
+        if (s.server && s.admins) {
+          return 'Each results file is kept on the server and sent to every admin logged in.';
+        }
+        if (s.server) { return 'Each results file is kept on the server.'; }
+        if (s.admins) { return 'Each results file is sent to every admin logged in, saved on their own PC.'; }
+        return 'Off: results are not kept anywhere unless Discord posts them.';
       };
 
       // ------------------------------------------------------------------

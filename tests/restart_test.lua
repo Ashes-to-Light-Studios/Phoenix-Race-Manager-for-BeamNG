@@ -94,6 +94,8 @@ end
 
 onInit()
 RM_onLogin(0, '{"password":"phoenix"}'); RM_onSetReadyCheck(0, '{"on":false}')
+-- Results are saved nowhere as shipped; this suite reads the server's file.
+RM_onSetResultsSave(0, '{"server":true}')
 for pid in pairs(connected) do RM_onPlayerJoin(pid) end
 RM_onSetRaceLimits(0, '{"laps":2,"seconds":0,"mode":"laps"}')
 RM_onSetFinishRule(0, '{"after":1,"seconds":0}')

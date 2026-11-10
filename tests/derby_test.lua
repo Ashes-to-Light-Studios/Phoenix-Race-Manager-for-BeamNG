@@ -87,6 +87,8 @@ check(lastDerby == nil, 'derby form-up ignored before authentication')
 -- The ready check is off after every admin login here: this suite pins
 -- the derby behind it. tests/ready_test.lua covers the call.
 RM_onLogin(1, '{"password":"phoenix"}'); RM_onSetReadyCheck(1, '{"on":false}')
+-- Results are saved nowhere as shipped; this suite reads the server's file.
+RM_onSetResultsSave(1, '{"server":true}')
 RM_onLogin(2, '{"password":"phoenix"}'); RM_onSetReadyCheck(2, '{"on":false}')
 -- Login broadcasts circuit state (adminPresent); clear it so the isolation
 -- assertion at the end still proves the derby itself never touches RM_Update.

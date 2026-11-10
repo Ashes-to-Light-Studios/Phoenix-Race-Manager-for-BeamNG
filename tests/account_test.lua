@@ -220,6 +220,8 @@ end
 
 local function login()
   RM_onLogin(9, '{"password":"phoenix"}'); RM_onSetReadyCheck(9, '{"on":false}')
+  -- Results are saved nowhere as shipped; this suite reads the server's file.
+  RM_onSetResultsSave(9, '{"server":true}')
 end
 -- A fresh plugin instance reading whatever is on disk: a server restart.
 local function bootPlugin()

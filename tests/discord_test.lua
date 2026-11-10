@@ -130,6 +130,9 @@ end
 
 onInit()
 RM_onLogin(0, '{"password":"phoenix"}'); RM_onSetReadyCheck(0, '{"on":false}')
+-- Save results as shipped: both off. Set here, since another suite's
+-- config.json may still be on disk.
+RM_onSetResultsSave(0, '{"server":false,"admins":false}')
 RM_onChangePassword(0, '{"password":"tuesday","role":"moderator"}')
 RM_onLogin(3, '{"password":"tuesday"}')
 for pid in pairs(connected) do RM_onPlayerJoin(pid) end
@@ -196,10 +199,18 @@ check(st.post.race == true and st.post.quali == false and st.post.derby and st.p
 RM_onRequestState(1)
 check(lastState(1).prmDiscord == nil, 'a driver who is not an admin is sent nothing about it')
 
+chat = {}
 runRace()
 check(#discord.queue == 0 and discord.job == nil, 'with no webhook a race queues nothing')
 RM_DiscordTick()
 check(#commands == 0, 'and nothing is started')
+local function warnedUnsaved()
+  for _, c in ipairs(chat) do
+    if c.msg:find('were not saved anywhere', 1, true) then return true end
+  end
+  return false
+end
+check(warnedUnsaved(), 'not posted and Save results off as shipped: the admins are told')
 
 -- ---------------------------------------------------------------------------
 -- 4. Setting the webhook: the admin tier's
@@ -225,6 +236,7 @@ check(st and st.configured and st.canEdit == false, 'a moderator sees it, and ca
 -- ---------------------------------------------------------------------------
 connected[2] = 'Bob *the* `Hammer` @everyone'
 RM_onPlayerJoin(2)
+chat = {}
 runRace()
 check(#discord.queue == 1 and #commands == 0, 'the post is queued, not sent inside finishSession')
 RM_DiscordTick()
@@ -249,6 +261,9 @@ check(body.attachments and body.attachments[1].id == 0
   and body.attachments[1].filename:match('^results_.*%.txt$'), 'the results file is attached')
 local attached = body.attachments and read(JOB .. '/' .. body.attachments[1].filename) or ''
 check(attached:find('SESSION RESULTS', 1, true), 'and it is the results file')
+-- Save results is off as shipped, so that file was never on the server's disk:
+-- the session handed its text over. Posted, so the results were kept somewhere.
+check(not warnedUnsaved(), 'posted to Discord, so no admin is told the results were saved nowhere')
 local desc = e.description or ''
 check(desc:find('**Club** on', 1, true) and desc:find('2 laps', 1, true)
   and desc:find('4 drivers', 1, true), 'the track, the distance and the field')
@@ -408,9 +423,16 @@ check(discord.build.derby({ list = {} }) == nil and discord.build.drag({}) == ni
 -- Long fields stop at M.ROWS and say where the rest are.
 local long = {}
 for i = 1, 25 do long[i] = { pos = i, name = 'Driver' .. i, wins = 0, losses = 1 } end
-desc = discord.build.drag({ list = long, format = 'points', file = 'x.txt' }).embed.description
+desc = discord.build.drag({ list = long, format = 'points', attached = true }).embed.description
 check(desc:find('Driver20', 1, true) and not desc:find('Driver21', 1, true)
   and desc:find('and 5 more in the results file attached', 1, true), 'twenty rows, then a note')
+-- The note names only a file that is there: Save results decides the server's.
+desc = discord.build.drag({ list = long, format = 'points', file = 'x.txt' }).embed.description
+check(desc:find('and 5 more in the results file on the server', 1, true),
+  'not attached, but saved on the server: the note says the server')
+desc = discord.build.drag({ list = long, format = 'points' }).embed.description
+check(desc:find('and 5 more', 1, true) and not desc:find('results file', 1, true),
+  'kept nowhere: the note names no file')
 
 -- A fault in a builder never reaches the session.
 local realBuild = discord.build.race

@@ -40,7 +40,7 @@ one so the headless tests exercise the real file format).
 | `garage.json` | Approved vehicles/setups and the enforcement switch | Clear Garage |
 | `roster.json` | Saved drivers: the display names an admin has assigned | Deleting a driver |
 | `cup.json` | Cup scoring rules, standings, per-round breakdown, adjustments | End Cup |
-| `results/*.txt` | One results file per finished session | Clear Results Cache |
+| `results/*.txt` | One results file per finished session, while Save results is on for the server (`saveResultsOnServer` in `config.json`, off as shipped) | Clear Results Cache |
 | `mapSwitch.json` | A map switch waiting for its restart, so the next boot can say whether it took | The next boot |
 | `mapNames.json` | Display names for maps, by level name | Renaming each map back |
 | `update/last.json` | The last in-game update: from, to, when, by whom, and the `_attic` folder holding the old files | The next update |
@@ -113,7 +113,8 @@ is published.
 `pcall` and every call site checks `race.discordPost` first, so a missing or
 broken `discord.lua` costs the posts and nothing else. It is a consumer of
 results too: `finishSession`, `finishDerby` and the drag ladder's
-`finishTournament` each hand it one snapshot as the session closes, and the
+`finishTournament` each hand it one snapshot as the session closes, with the
+results text itself (the server may keep no file of it), and the
 post is sent from its own 1 second tick by curl in a process of its own, the
 way `update.lua` downloads. Two rules hold it together: the webhook URL never
 leaves the server (the panel gets the last digits of its id, and curl reads it
