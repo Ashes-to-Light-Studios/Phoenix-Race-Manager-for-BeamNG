@@ -327,7 +327,8 @@ jobs:
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # The releases channel, or the everything channel until it has one.
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASES_WEBHOOK_URL || secrets.DISCORD_WEBHOOK_URL }}
           TAG: ${{ needs.package.outputs.tag }}
         run: |
           gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > release.json

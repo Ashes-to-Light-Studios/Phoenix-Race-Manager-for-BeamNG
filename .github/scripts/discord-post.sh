@@ -17,7 +17,9 @@
 # Environment:
 #   DISCORD_WEBHOOK_URL  the channel's webhook URL, or several, one per line:
 #                        each gets every post. Empty: say so and exit 0, so a
-#                        repo without the secret stays green.
+#                        repo without the secret stays green. WHICH channel
+#                        an event goes to is the caller's choice: the workflows
+#                        pass the releases secret here for a release.
 #   DISCORD_DRY_RUN      set to print the JSON instead of posting it.
 set -euo pipefail
 
@@ -135,7 +137,7 @@ if [ -n "${DISCORD_DRY_RUN:-}" ]; then
 fi
 
 if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
-  echo "::notice::DISCORD_WEBHOOK_URL is not set, so nothing was posted to Discord. Add it under Settings, Secrets and variables, Actions."
+  echo "::notice::No Discord webhook secret is set, so nothing was posted. Add DISCORD_WEBHOOK_URL (and DISCORD_RELEASES_WEBHOOK_URL for releases) under Settings, Secrets and variables, Actions."
   exit 0
 fi
 

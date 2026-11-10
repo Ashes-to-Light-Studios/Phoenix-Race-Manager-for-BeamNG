@@ -14,6 +14,11 @@ name: Post to Discord
 # URL in that same secret, one per line. Until then every run says so and stays
 # green.
 #
+# RELEASES GO TO THEIR OWN CHANNEL: a second secret, DISCORD_RELEASES_WEBHOOK_URL,
+# holds that channel's webhook URL. Pushes, pull requests, issues and comments
+# go to DISCORD_WEBHOOK_URL. While the releases secret is unset, releases are
+# posted with everything else rather than nowhere.
+#
 # pull_request_target, not pull_request: a pull request from a fork gets no
 # secrets under pull_request, so it could not post. This is safe here because
 # nothing from the pull request is checked out or run -- the checkout below is
@@ -52,5 +57,5 @@ jobs:
 
       - name: Post
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_WEBHOOK_URL: ${{ github.event_name == 'release' && secrets.DISCORD_RELEASES_WEBHOOK_URL || secrets.DISCORD_WEBHOOK_URL }}
         run: bash .github/scripts/discord-post.sh "$GITHUB_EVENT_NAME" "$GITHUB_EVENT_PATH"
