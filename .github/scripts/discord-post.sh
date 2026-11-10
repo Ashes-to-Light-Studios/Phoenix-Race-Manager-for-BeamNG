@@ -30,7 +30,7 @@ set -euo pipefail
 # picture, replace that file -- under a NEW NAME, and change the link to
 # match, or Discord keeps showing the copy it already fetched.
 IDENTITIES='
-JHaseldenDev|Jraysunshine|https://raw.githubusercontent.com/Ashes-to-Light-Studios/Phoenix-Race-Manager-for-BeamNG/main/.github/discord/sun.png
+JHaseldenDev|JraySunshine|https://raw.githubusercontent.com/Ashes-to-Light-Studios/Phoenix-Race-Manager-for-BeamNG/main/.github/discord/sun.png
 '
 
 event="${1:?usage: discord-post.sh <event name> <event payload file>}"
