@@ -26,7 +26,7 @@ You need a **BeamMP server you control**. Racing is multiplayer-only; offline
 you get the checkpoint editor and nothing else.
 
 **Windows:** download
-**[PRM-Setup.exe](https://github.com/aosjay13/BeamNG-Race-Manager-by-Phoenix/releases/latest/download/PRM-Setup.exe)**
+**[PRM-Setup.exe](https://github.com/Ashes-to-Light-Studios/Phoenix-Race-Manager-for-BeamNG/releases/latest/download/PRM-Setup.exe)**
 and open it. It finds your BeamMP server, installs PRM into it and says what it
 did. Windows may warn that it does not recognise the file: press **More info**,
 then **Run anyway**.
@@ -34,7 +34,7 @@ then **Run anyway**.
 **Linux:** in the server's folder, run
 
 ```bash
-curl -fsSLO https://github.com/aosjay13/BeamNG-Race-Manager-by-Phoenix/releases/latest/download/PRM-Install.sh && bash PRM-Install.sh
+curl -fsSLO https://github.com/Ashes-to-Light-Studios/Phoenix-Race-Manager-for-BeamNG/releases/latest/download/PRM-Install.sh && bash PRM-Install.sh
 ```
 
 **A hosting panel with no shell:** download `RaceManager-vX.Y.Z.zip` from

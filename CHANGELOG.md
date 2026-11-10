@@ -6,6 +6,18 @@ tag, the packaged zip, and the build stamp the app shows - see the note in
 
 [← Back to the README](README.md)
 
+## Unreleased
+
+#### Changed
+
+- **The repo moved** to
+  [Ashes-to-Light-Studios/Phoenix-Race-Manager-for-BeamNG](https://github.com/Ashes-to-Light-Studios/Phoenix-Race-Manager-for-BeamNG),
+  and the download page to
+  <https://ashes-to-light-studios.github.io/Phoenix-Race-Manager-for-BeamNG/>.
+  The old page address no longer works. Update checks look in the new repo; a
+  server whose `config.json` still names the old one in `updateRepo` is
+  switched over at boot. One pointed at a fork keeps its own.
+
 ## 0.23.0 - Results on Discord
 
 #### Added

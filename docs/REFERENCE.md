@@ -3162,7 +3162,7 @@ says so and gives the release page to install by hand.
 | Setting | Default | What it does |
 |---|---|---|
 | `updateCheck` | `true` | `false` never contacts GitHub: no check, no band, no button |
-| `updateRepo` | `aosjay13/BeamNG-Race-Manager-by-Phoenix` | Where to look, as owner/name. A fork can point it at its own releases |
+| `updateRepo` | `Ashes-to-Light-Studios/Phoenix-Race-Manager-for-BeamNG` | Where to look, as owner/name. A fork can point it at its own releases |
 
 A release must be tagged `vX.Y.Z` and carry `RaceManager-vX.Y.Z.zip` laid out
 the way the package workflow builds it. Anything else is refused, with the

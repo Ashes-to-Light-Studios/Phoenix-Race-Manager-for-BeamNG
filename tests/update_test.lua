@@ -203,7 +203,7 @@ end
 -- ---------------------------------------------------------------------------
 -- 6. The release GitHub describes
 -- ---------------------------------------------------------------------------
-local REPO = 'aosjay13/BeamNG-Race-Manager-by-Phoenix'
+local REPO = 'Ashes-to-Light-Studios/Phoenix-Race-Manager-for-BeamNG'
 local function release(fields)
   local r = {
     tag_name = 'v9.9.9', name = 'v9.9.9 - Faster pit stops', draft = false, prerelease = false,

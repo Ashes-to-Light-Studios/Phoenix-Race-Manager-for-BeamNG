@@ -1,7 +1,7 @@
 name: Publish download page
 
 # site/ is the download page people are sent to, published by GitHub Pages at
-#   https://aosjay13.github.io/BeamNG-Race-Manager-by-Phoenix/
+#   https://ashes-to-light-studios.github.io/Phoenix-Race-Manager-for-BeamNG/
 # Its link preview (og.jpg, the title and the description) is what Discord and
 # forums show for that URL; a release page's preview is GitHub's own and fixed.
 #
